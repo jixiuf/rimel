@@ -54,6 +54,14 @@ When nil, use the default schema configured in Rime."
   :type '(choice (const :tag "Default" nil) string)
   :group 'rimel)
 
+(defcustom rimel-show-candidate 'echo-area
+  "How to display candidates.
+`echo-area' - display in the echo area (default)
+`posframe'  - display in a child frame near cursor (requires posframe package)"
+  :type '(choice (const :tag "Echo area" echo-area)
+                 (const :tag "Posframe" posframe))
+  :group 'rimel)
+
 (defcustom rimel-return-behavior 'raw
   "Behavior of Enter key during composition.
 `raw'     - commit the raw input as English (e.g., \"nihao\")
@@ -114,10 +122,39 @@ The Nth key selects the Nth candidate on the current page."
   "Face for the highlighted candidate."
   :group 'rimel)
 
+(defcustom rimel-posframe-style 'vertical
+  "Candidate layout style in posframe.
+`vertical'   - one candidate per line
+`horizontal' - all candidates in one line"
+  :type '(choice (const :tag "Vertical" vertical)
+                 (const :tag "Horizontal" horizontal))
+  :group 'rimel)
+
+(defcustom rimel-posframe-min-width 20
+  "Minimum width of the posframe."
+  :type 'integer
+  :group 'rimel)
+
+(defface rimel-posframe-face
+  '((t (:inherit default)))
+  "Face for the posframe body text."
+  :group 'rimel)
+
+(defface rimel-posframe-border-face
+  '((t (:inherit border)))
+  "Face for the posframe border."
+  :group 'rimel)
+
 ;;; Internal variables
 
 (defvar rimel--preedit-overlay nil
   "Overlay for displaying preedit at cursor.")
+
+(defvar rimel--posframe-buffer " *rimel-posframe*"
+  "Buffer name for posframe candidate display.")
+
+(declare-function posframe-show "ext:posframe")
+(declare-function posframe-hide "ext:posframe")
 
 ;;; Activation / Deactivation
 
@@ -155,22 +192,25 @@ _NAME is the input method name (unused)."
     (delete-overlay rimel--preedit-overlay)
     (setq rimel--preedit-overlay nil)))
 
-;;; Candidate display (echo area)
+;;; Candidate display
 
-(defun rimel--format-candidates (context)
-  "Format CONTEXT into a candidate display string for echo area."
+(defun rimel--format-candidates (context &optional separator show-preedit)
+  "Format CONTEXT into a candidate display string.
+SEPARATOR is placed between candidates (default single space).
+When SHOW-PREEDIT is non-nil, include the preedit string."
   (let* ((composition (alist-get 'composition context))
          (preedit (alist-get 'preedit composition))
          (menu (alist-get 'menu context))
          (candidates (alist-get 'candidates menu))
          (highlighted (alist-get 'highlighted-candidate-index menu))
          (page-no (alist-get 'page-no menu))
-         (last-page-p (alist-get 'last-page-p menu)))
+         (last-page-p (alist-get 'last-page-p menu))
+         (sep (or separator " ")))
     (when candidates
       (let ((parts '())
             (idx 0))
-        ;; Preedit
-        (when preedit
+        ;; Preedit (only for echo-area, posframe has overlay)
+        (when (and show-preedit preedit)
           (push (format "[%s]" preedit) parts))
         ;; Candidates
         (dolist (cand candidates)
@@ -188,14 +228,54 @@ _NAME is the input method name (unused)."
         (push (format "(%d%s)" (1+ (or page-no 0))
                       (if last-page-p "" "+"))
               parts)
-        (string-join (nreverse parts) " ")))))
+        (string-join (nreverse parts) sep)))))
 
 (defun rimel--show-candidates (context)
+  "Display candidates from CONTEXT using the configured method."
+  (pcase rimel-show-candidate
+    ('posframe (rimel--posframe-show context))
+    (_ (rimel--echo-area-show context))))
+
+(defun rimel--hide-candidates ()
+  "Hide the candidate display."
+  (pcase rimel-show-candidate
+    ('posframe (rimel--posframe-hide))
+    (_ (let ((message-log-max nil)) (message nil)))))
+
+;; Echo area backend
+
+(defun rimel--echo-area-show (context)
   "Display candidates from CONTEXT in the echo area."
-  (let ((content (rimel--format-candidates context)))
+  (let ((content (rimel--format-candidates context " " t)))
     (when content
       (let ((message-log-max nil))
         (message "%s" content)))))
+
+;; Posframe backend
+
+(defun rimel--posframe-show (context)
+  "Display candidates from CONTEXT in a posframe near cursor."
+  (if (not (require 'posframe nil t))
+      (rimel--echo-area-show context)
+    (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
+           (content (rimel--format-candidates context sep nil)))
+      (if (not content)
+          (rimel--posframe-hide)
+        (posframe-show
+         rimel--posframe-buffer
+         :string content
+         :position (point)
+         :background-color (face-background 'rimel-posframe-face nil t)
+         :foreground-color (face-foreground 'rimel-posframe-face nil t)
+         :border-width 1
+         :border-color (face-background 'rimel-posframe-border-face nil t)
+         :min-width rimel-posframe-min-width
+         :timeout nil)))))
+
+(defun rimel--posframe-hide ()
+  "Hide the posframe candidate display."
+  (when (require 'posframe nil t)
+    (posframe-hide rimel--posframe-buffer)))
 
 ;;; State management
 
@@ -203,8 +283,7 @@ _NAME is the input method name (unused)."
   "Clear all composition state."
   (ignore-errors (liberime-clear-composition))
   (rimel--clear-preedit)
-  (let ((message-log-max nil))
-    (message nil)))
+  (rimel--hide-candidates))
 
 ;;; Core input method
 
@@ -344,8 +423,7 @@ Return list of characters to insert, or nil."
                                unread-command-events))))))))
       ;; Cleanup (unwind-protect)
       (rimel--clear-preedit)
-      (let ((message-log-max nil))
-        (message nil)))
+      (rimel--hide-candidates))
     ;; Return result
     (when (and result (not (string-empty-p result)))
       (string-to-list result))))

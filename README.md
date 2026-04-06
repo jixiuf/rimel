@@ -8,7 +8,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 - 📦 **单文件**：仅 `rimel.el` 一个文件，约 500 行
 - 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
-- 📋 **Echo area 候选展示**：`[ni hao] 1.你好 2.你 3.拟 (1+)`
+- 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
 - ✏️ **光标处编码 overlay**：输入时在光标处显示 preedit
 - 📄 **翻页**：支持 `]/[`、`=/−`、`./,`、`C-v/M-v`、`PgDn/PgUp` 等（完全可配置）
 - ⏎ **Enter 英文上屏**：按 Enter 直接提交原始英文输入
@@ -27,10 +27,21 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ```elisp
 (add-to-list 'load-path "/path/to/rimel")
 (add-to-list 'load-path "/path/to/liberime")
+
+;; 如果自定义了用户数据，可通过此配置定制
+;;(setq liberime-user-data-dir "") ;
+
+;; 自动编译liberime 模块 详见 https://github.com/merrickluo/liberime
+;;(setq liberime-auto-build t)
+
 (require 'rimel)
 
 ;; 可选：指定输入方案
 (setq rimel-schema "luna_pinyin_simp")
+
+;; 可选：使用 posframe 展示候选（需安装 posframe 包）
+;; (setq rimel-show-candidate 'posframe)
+
 (setq default-input-method "rimel")
 ```
 
@@ -53,6 +64,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `rimel-schema` | `nil` | Rime 方案 ID（如 `"luna_pinyin_simp"`），nil 用默认 |
+| `rimel-show-candidate` | `'echo-area` | 候选展示方式：`echo-area` 或 `posframe` |
 | `rimel-return-behavior` | `'raw` | Enter 行为：`raw` 英文上屏、`preview` 首选上屏 |
 | `rimel-page-down-keys` | `'(next ?\] ?= ?.)` | 下翻页键（支持 symbol 和 character） |
 | `rimel-page-up-keys` | `'(prior ?\[ ?- ?,)` | 上翻页键 |
@@ -61,6 +73,8 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | `rimel-backspace-keys` | `'(backspace ?\C-? 127 ?\C-h)` | 退格键 |
 | `rimel-cancel-keys` | `'(escape ?\C-g)` | 取消键 |
 | `rimel-select-label-keys` | `'(?1 ... ?9)` | 候选选择键 |
+| `rimel-posframe-style` | `'vertical` | Posframe 布局：`vertical` 或 `horizontal` |
+| `rimel-posframe-min-width` | `20` | Posframe 最小宽度 |
 
 ### 按键配置示例
 
@@ -87,7 +101,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | **代码量** | ~500 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
 | **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
-| **候选展示** | echo area | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
+| **候选展示** | echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
 | **按键处理** | `read-event` 循环（类似 quail） | `overriding-terminal-local-map` | 独立事件系统 |
 
 ### 设计哲学
@@ -121,7 +135,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | 基本中文输入 | ✅ | ✅ | ✅ |
 | 候选翻页 | ✅ | ✅ | ✅ |
 | Enter 英文上屏 | ✅ | ✅ | ✅ |
-| 多种候选展示 | echo area | 5 种 | 3 种 |
+| 多种候选展示 | echo area / posframe | 5 种 | 3 种 |
 | Predicates 自动切换 | ❌ | ✅ | ✅ (probe) |
 | Inline ASCII | ❌ | ✅ | ❌ |
 | 多输入方案后端 | ❌ | ❌ | ✅ |
