@@ -5,7 +5,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 
 ## 特性
 
-- 📦 **单文件**：仅 `rimel.el` 一个文件，约 500 行
+- 📦 **单文件**：仅 `rimel.el` 一个文件，约 600 行
 - 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
 - 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
@@ -14,6 +14,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 - ⏎ **Enter 英文上屏**：按 Enter 直接提交原始英文输入
 - 🔢 **数字键/空格选候选**
 - ⌨️ **所有按键可配置**：翻页、确认、取消、退格、选择键均可自定义
+- 🧠 **Predicates 断言**：根据上下文自动切换中/英文（代码区、字母后、evil 状态等）
 
 ## 安装
 
@@ -73,6 +74,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | `rimel-backspace-keys` | `'(backspace ?\C-? 127 ?\C-h)` | 退格键 |
 | `rimel-cancel-keys` | `'(escape ?\C-g)` | 取消键 |
 | `rimel-select-label-keys` | `'(?1 ... ?9)` | 候选选择键 |
+| `rimel-disable-predicates` | `nil` | 断言列表，任一返回 t 则自动英文 |
 | `rimel-posframe-style` | `'vertical` | Posframe 布局：`vertical` 或 `horizontal` |
 | `rimel-posframe-min-width` | `20` | Posframe 最小宽度 |
 
@@ -91,6 +93,60 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 (setq rimel-return-behavior 'preview)
 ```
 
+## Predicates 断言（自动切换中英文）
+
+Predicates 是一组函数，在每次按键时检查上下文，决定是否跳过中文输入直接输出英文。
+配置 `rimel-disable-predicates` 列表，任一函数返回非 nil 即禁用中文。
+
+### 内置断言
+
+| 断言 | 说明 | 推荐度 |
+|------|------|--------|
+| `rimel-predicate-prog-in-code-p` | 在代码中（非注释/字符串）自动英文 | ★★★ |
+| `rimel-predicate-after-alphabet-char-p` | 光标前是英文字母时自动英文 | ★★★ |
+| `rimel-predicate-current-uppercase-letter-p` | 输入大写字母时自动英文 | ★★★ |
+| `rimel-predicate-evil-mode-p` | evil normal/visual/motion 状态自动英文 | ★★★ |
+| `rimel-predicate-after-ascii-char-p` | 光标前是 ASCII 字符时自动英文 | ★★ |
+| `rimel-predicate-org-in-src-block-p` | 在 Org 源码块中自动英文 | ★★ |
+| `rimel-predicate-org-latex-mode-p` | 在 Org LaTeX 片段中自动英文 | ★ |
+| `rimel-predicate-tex-math-or-command-p` | 在 TeX 数学环境中自动英文 | ★ |
+
+### 配置示例
+
+```elisp
+;; 推荐配置：代码区 + 字母后 + 大写字母
+(setq rimel-disable-predicates
+      '(rimel-predicate-prog-in-code-p
+        rimel-predicate-after-alphabet-char-p
+        rimel-predicate-current-uppercase-letter-p))
+
+;; Evil 用户推荐
+(setq rimel-disable-predicates
+      '(rimel-predicate-prog-in-code-p
+        rimel-predicate-after-alphabet-char-p
+        rimel-predicate-current-uppercase-letter-p
+        rimel-predicate-evil-mode-p))
+
+;; Org 用户可以额外添加
+(add-to-list 'rimel-disable-predicates 'rimel-predicate-org-in-src-block-p)
+```
+
+### 兼容性
+
+断言函数签名与 emacs-rime 和 pyim 一致（无参数、返回 t/nil），
+因此可以直接使用它们的断言函数：
+
+```elisp
+;; 使用 emacs-rime 的断言（需加载 rime-predicates）
+(setq rimel-disable-predicates
+      '(rime-predicate-prog-in-code-p
+        rime-predicate-after-alphabet-char-p))
+
+;; 使用 pyim 的探针（需加载 pyim-probe）
+(setq rimel-disable-predicates
+      '(pyim-probe-program-mode))
+```
+
 ## 与 emacs-rime、pyim 的对比
 
 ### 架构对比
@@ -98,7 +154,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | | **Rimel** | **emacs-rime** | **pyim + pyim-liberime** |
 |---|---|---|---|
 | **依赖** | liberime | 自带 C 模块 (lib.c) | pyim 框架 + liberime |
-| **代码量** | ~500 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
+| **代码量** | ~600 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
 | **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
 | **候选展示** | echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
@@ -136,7 +192,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | 候选翻页 | ✅ | ✅ | ✅ |
 | Enter 英文上屏 | ✅ | ✅ | ✅ |
 | 多种候选展示 | echo area / posframe | 5 种 | 3 种 |
-| Predicates 自动切换 | ❌ | ✅ | ✅ (probe) |
+| Predicates 自动切换 | ✅ (8 个内置) | ✅ (20 个) | ✅ (probe) |
 | Inline ASCII | ❌ | ✅ | ❌ |
 | 多输入方案后端 | ❌ | ❌ | ✅ |
 | 词频学习 | rime 内置 | rime 内置 | rime + pyim |
@@ -146,8 +202,8 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 
 ### 如何选择？
 
-- **想要最简单、最轻量的 rime 体验** → Rimel
-- **需要 predicates、inline ASCII、多种候选 UI** → emacs-rime
+- **想要最简单、最轻量的 rime 体验（含 predicates）** → Rimel
+- **需要 inline ASCII、多种候选 UI（5 种）** → emacs-rime
 - **需要多输入法后端（五笔+拼音+rime）统一管理** → pyim
 
 ## License

@@ -112,6 +112,36 @@ The Nth key selects the Nth candidate on the current page."
   :type '(repeat sexp)
   :group 'rimel)
 
+(defcustom rimel-disable-predicates nil
+  "List of predicate functions for auto-switching to English.
+Each function takes no arguments and returns non-nil to disable
+Chinese input (pass through the key as-is).  If ANY predicate
+returns non-nil, Chinese input is skipped for that key.
+
+The variable `rimel--current-input-key' holds the key being
+processed, available for predicates that need it.
+
+Built-in predicates:
+  `rimel-predicate-prog-in-code-p'
+  `rimel-predicate-after-alphabet-char-p'
+  `rimel-predicate-after-ascii-char-p'
+  `rimel-predicate-current-uppercase-letter-p'
+  `rimel-predicate-evil-mode-p'
+  `rimel-predicate-org-in-src-block-p'
+  `rimel-predicate-org-latex-mode-p'
+  `rimel-predicate-tex-math-or-command-p'
+
+You can also use predicates from emacs-rime (rime-predicate-*)
+or pyim (pyim-probe-*) if those packages are loaded.
+
+Example:
+  (setq rimel-disable-predicates
+        \\='(rimel-predicate-prog-in-code-p
+          rimel-predicate-after-alphabet-char-p
+          rimel-predicate-current-uppercase-letter-p))"
+  :type '(repeat function)
+  :group 'rimel)
+
 (defface rimel-preedit-face
   '((t (:underline t :inherit font-lock-builtin-face)))
   "Face for the inline preedit string."
@@ -149,6 +179,10 @@ The Nth key selects the Nth candidate on the current page."
 
 (defvar rimel--preedit-overlay nil
   "Overlay for displaying preedit at cursor.")
+
+(defvar rimel--current-input-key nil
+  "The key currently being processed by `rimel-input-method'.
+Available for use by predicate functions in `rimel-disable-predicates'.")
 
 (defvar rimel--posframe-buffer " *rimel-posframe*"
   "Buffer name for posframe candidate display.")
@@ -326,8 +360,10 @@ Works for both character (integer) and symbol events."
 (defun rimel-input-method (key)
   "Process KEY through rimel input method.
 This function serves as `input-method-function'."
+  (setq rimel--current-input-key key)
   (if (or buffer-read-only
-          (not (rimel--composable-key-p key)))
+          (not (rimel--composable-key-p key))
+          (not (rimel--should-enable-p)))
       (list key)
     ;; Start composition
     (liberime-clear-composition)
@@ -427,6 +463,92 @@ Return list of characters to insert, or nil."
     ;; Return result
     (when (and result (not (string-empty-p result)))
       (string-to-list result))))
+
+;;; Predicates — context-based auto English switching
+
+(defun rimel--should-enable-p ()
+  "Return non-nil if Chinese input should be active.
+Checks `rimel-disable-predicates'; if any returns non-nil,
+Chinese input is disabled for the current key."
+  (not (seq-find #'funcall rimel-disable-predicates)))
+
+(defun rimel-predicate-prog-in-code-p ()
+  "Return non-nil when cursor is in code (not string/comment).
+Only active in `prog-mode' derived buffers."
+  (and (derived-mode-p 'prog-mode 'conf-mode)
+       (let ((ppss (syntax-ppss)))
+         (not (or (nth 3 ppss)    ; in string
+                  (nth 4 ppss)))))) ; in comment
+
+(defun rimel-predicate-after-alphabet-char-p ()
+  "Return non-nil when the char before point is a Latin letter.
+Useful for continuing English words without switching."
+  (and (> (point) (point-min))
+       (let ((ch (char-before)))
+         (and ch
+              (or (and (>= ch ?a) (<= ch ?z))
+                  (and (>= ch ?A) (<= ch ?Z)))))))
+
+(defun rimel-predicate-after-ascii-char-p ()
+  "Return non-nil when the char before point is an ASCII char.
+Broader than `rimel-predicate-after-alphabet-char-p' — includes
+digits and punctuation."
+  (and (> (point) (point-min))
+       (let ((ch (char-before)))
+         (and ch (>= ch #x21) (<= ch #x7e)))))
+
+(defun rimel-predicate-current-uppercase-letter-p ()
+  "Return non-nil when the current input key is an uppercase letter."
+  (and rimel--current-input-key
+       (integerp rimel--current-input-key)
+       (>= rimel--current-input-key ?A)
+       (<= rimel--current-input-key ?Z)))
+
+(declare-function evil-normal-state-p "ext:evil-states")
+(declare-function evil-visual-state-p "ext:evil-states")
+(declare-function evil-motion-state-p "ext:evil-states")
+(declare-function evil-operator-state-p "ext:evil-states")
+
+(defun rimel-predicate-evil-mode-p ()
+  "Return non-nil in evil normal, visual, motion or operator state.
+Returns nil if evil is not loaded or in insert/emacs state."
+  (and (fboundp 'evil-normal-state-p)
+       (or (evil-normal-state-p)
+           (evil-visual-state-p)
+           (evil-motion-state-p)
+           (evil-operator-state-p))))
+
+(declare-function org-in-src-block-p "ext:org")
+
+(defun rimel-predicate-org-in-src-block-p ()
+  "Return non-nil when point is inside an Org source block."
+  (and (derived-mode-p 'org-mode)
+       (fboundp 'org-in-src-block-p)
+       (org-in-src-block-p)))
+
+(declare-function org-inside-LaTeX-fragment-p "ext:org")
+(declare-function org-inside-latex-macro-p "ext:org")
+
+(defun rimel-predicate-org-latex-mode-p ()
+  "Return non-nil when point is in an Org LaTeX fragment or macro."
+  (and (derived-mode-p 'org-mode)
+       (or (and (fboundp 'org-inside-LaTeX-fragment-p)
+                (org-inside-LaTeX-fragment-p))
+           (and (fboundp 'org-inside-latex-macro-p)
+                (org-inside-latex-macro-p)))))
+
+(declare-function texmathp "ext:texmathp")
+
+(defun rimel-predicate-tex-math-or-command-p ()
+  "Return non-nil in a TeX math environment or after a TeX command.
+Supports AUCTeX's `texmathp' if available, otherwise falls back
+to detecting $ and \\ prefixes."
+  (when (derived-mode-p 'tex-mode 'latex-mode 'TeX-mode 'LaTeX-mode)
+    (or (and (fboundp 'texmathp) (texmathp))
+        ;; Fallback: check for $ or \ before point
+        (and (> (point) (point-min))
+             (let ((ch (char-before)))
+               (or (eq ch ?$) (eq ch ?\\)))))))
 
 ;;; Registration
 
