@@ -54,7 +54,7 @@ When nil, use the default schema configured in Rime."
   :type '(choice (const :tag "Default" nil) string)
   :group 'rimel)
 
-(defcustom rimel-show-candidate 'echo-area
+(defcustom rimel-show-candidate (or (require 'posframe nil t) 'echo-area)
   "How to display candidates.
 `echo-area' - display in the echo area (default)
 `posframe'  - display in a child frame near cursor (requires posframe package)"
@@ -70,18 +70,64 @@ When nil, use the default schema configured in Rime."
                  (const :tag "First candidate" preview))
   :group 'rimel)
 
-(defcustom rimel-page-down-keys '(next ?\] ?= ?.)
-  "Keys for next page during candidate selection.
-Each element is an event as returned by `read-event': a character
-integer (e.g., ?=, ?\\C-v) or a symbol (e.g., `next')."
-  :type '(repeat sexp)
-  :group 'rimel)
+(defcustom rimel-keymap
+  '((home   . "<home>")
+    (left   . "<left>")
+    (right  . "<right>")
+    (up     . "<up>")
+    (down   . "<down>")
+    (?\C-p  . "<up>")
+    (?\C-n  . "<down>")
+    (prior  . "<prior>")
+    (next   . "<next>")
+    (?\C-b  . "<pageup>")
+    (?\C-f  . "<pagedown>")
+    (?\C-k  . "S-<delete>")
+    (end    . "<end>")
+    (begin  . "<home>"))
+  "Alist of (emacs-key . rime-keycode) mappings for candidate navigation.
 
-(defcustom rimel-page-up-keys '(prior ?\[ ?- ?,)
-  "Keys for previous page during candidate selection.
-Each element is an event: a character integer (e.g., ?-, ?\\M-v)
-or a symbol (e.g., `prior')."
-  :type '(repeat sexp)
+Common Emacs keys: `right', `left', `next', `prior', `\\C-f', `\\C-b', etc.
+
+Value format supports:
+  \"FF52\"  - plain hex keycode
+  \"0xFF52\" - plain hex keycode (with 0x prefix)
+  \"C-a\"    - Control + a (modifier + key)
+  \"M-a\"     - Alt + a
+  \"S-a\"     - Shift + a
+  \"s-a\"     - Super + a
+  \"H-a\"     - Hyper + a
+  \"<left>\"  - symbol key (angle brackets)
+  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
+
+Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper)
+Key can be: hex (FF52), char (a), or symbol (<left>)
+
+Example:
+  (setq rimel-keymap
+        '((left . \"C-<left>\")
+          (right . \"C-<right>\")
+          (prior . \"<prior>\")
+          (next . \"<next>\")
+          (end . \"<end>\")
+          (begin . \"<home>\")))
+
+Common Emacs keys: `right', `left', `next', `prior', `\\C-f', `\\C-b', etc.
+Common rime keycodes (hex):
+See the hex keycode in https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
+
+The rime-keycode can be a single string, or a list of strings to try sequentially.
+Example:
+  (setq rimel-keymap
+        '((right . \"0xFF2F\")
+          (left  . \"0xFF2F\")
+          (next  . \"0xFF56\")
+          (prior . \"0xFF55\")
+          (right . (\"0xFF53\" \"0xFF2F\"))))"
+  :type '(repeat (cons (sexp :tag "Emacs key")
+                       (choice (string :tag "Rime key")
+                               (repeat :tag "Rime keys"
+                                       (string :tag "Rime key")))))
   :group 'rimel)
 
 (defcustom rimel-confirm-keys '(?\s)
@@ -333,9 +379,89 @@ Only lowercase letters start composition."
 Works for both character (integer) and symbol events."
   (memq event keys))
 
-(defun rimel--feed-key (key)
+(defun rimel--feed-key (key &optional mask)
   "Send KEY to liberime for processing.  Return non-nil if handled."
-  (liberime-process-key key))
+  (if mask
+      (liberime-process-key key mask)
+    (liberime-process-key key)))
+
+(defun rimel--feed-key-string (keycode)
+  "Parse KEYCODE string(s) and feed to rime.
+Supports formats:
+  ?a         - char
+  #xFF52     - hex keycode
+  \"0xFF52\" - plain hex keycode
+  \"C-a\"    - Control + key
+  \"M-a\"    - Alt (Mod1) + key
+  \"S-a\"    - Shift + key
+  \"s-a\"    - Super + key
+  \"H-a\"    - Hyper + key
+  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
+The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\"."
+  (cond
+   ((listp keycode)
+    (dolist (kc keycode)
+      (rimel--feed-key-string kc)))
+   ((stringp keycode)
+    (let ((case-fold-search nil)
+          (modifiers 0)
+          (key keycode))
+      (when (string-match "^\\([CMsSH]\\)-" keycode)
+        (pcase (substring keycode (match-beginning 1) (match-end 1))
+          ("C" (setq modifiers (logior modifiers 4)))
+          ("M" (setq modifiers (logior modifiers 8)))
+          ("s" (setq modifiers (logior modifiers (lsh 1 26)))) ; Super
+          ("S" (setq modifiers (logior modifiers 1)))
+          ("H" (setq modifiers (logior modifiers (lsh 1 27))))) ; Hyper
+        (setq key (substring keycode (match-end 0))))
+      (let ((keyval
+             (cond
+              ((numberp key) key)       ;#xff52, ?a
+              ;; hex keycode like "0xFF52" or "FF52"
+              ((string-match "^0x[0-9A-Fa-f]+$" key)
+               (string-to-number (substring key 2) 16))
+              ;; single char like "a"
+              ((= (length key) 1)
+               (if (string-match "[0-9A-Z]" key)
+                   (+ 64 (- (aref key 0) ?A))
+                 (aref key 0)))
+              ;; symbol like "<left>"
+              ((string-match "^<\\(.+\\)>$" key)
+               (let ((sym (downcase (match-string 1 key))))
+                 (pcase sym
+                   ;; https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
+                   ("left" #xff51)
+                   ("right" #xff53)
+                   ("up" #xff52)
+                   ("down" #xff54)
+                   ("prior" #xff55)
+                   ("pageup" #xff55)
+                   ("next" #xff56)
+                   ("pagedown" #xff56)
+                   ("home" #xff50)
+                   ("end" #xff57)
+                   ("delete" #xffff)
+                   ("backspace" #xff08)
+                   ("return" #xff0d)
+                   ("comma" #x002c)
+                   ("colon" #x003a)
+                   ("semicolon" #x003b)
+                   ("grave" #x0060)
+                   ("less" #x003c)
+                   ("equal" #x003d)
+                   ("slash" #x002f)
+                   ("period" #x002e)
+                   ("minus" #x002d)
+                   ("plus" #x002b)
+                   ("bracketleft" #x005b)
+                   ("bracketright" #x005d)
+                   ("backslash" #x005c)
+                   ("space" #x0020)
+                   ("tab" #xff09)
+                   ("escape" #xff1b)
+                   (t (user-error "Unknown key symbol: %s" key)))))
+                 (t (user-error "Invalid key format: %s" key)))))
+             (rimel--feed-key keyval modifiers))))))
 
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
@@ -438,15 +564,11 @@ Return list of characters to insert, or nil."
                 (liberime-clear-composition)
                 (setq continue nil))
 
-               ;; Page down
-               ((rimel--event-in-p event rimel-page-down-keys)
-                (rimel--feed-key 65366)
-                (rimel--update-display))
-
-               ;; Page up
-               ((rimel--event-in-p event rimel-page-up-keys)
-                (rimel--feed-key 65365)
-                (rimel--update-display))
+               ;; Key mapping via rimel-keymap
+                ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
+                             (rime-keycode (cdr pair)))
+                   (rimel--feed-key-string rime-keycode)
+                   (rimel--update-display)))
 
                ;; Unhandled key - exit composition, push key back
                (t

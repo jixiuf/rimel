@@ -5,15 +5,15 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 
 ## 特性
 
-- 📦 **单文件**：仅 `rimel.el` 一个文件，约 600 行
+- 📦 **单文件**：仅 `rimel.el` 一个文件，约 700 行
 - 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
 - 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
 - ✏️ **光标处编码 overlay**：输入时在光标处显示 preedit
-- 📄 **翻页**：支持 `]/[`、`=/−`、`./,`、`C-v/M-v`、`PgDn/PgUp` 等（完全可配置）
+- 📄 **翻页**：支持 `C-f/C-b`、`PgDn/PgUp` 等（完全可配置）
 - ⏎ **Enter 英文上屏**：按 Enter 直接提交原始英文输入
 - 🔢 **数字键/空格选候选**
-- ⌨️ **所有按键可配置**：翻页、确认、取消、退格、选择键均可自定义
+- ⌨️ **所有按键可配置**：翻页、确认、取消、退格、选择键均可自定义 see rimel-keymap
 - 🧠 **Predicates 断言**：根据上下文自动切换中/英文（代码区、字母后、evil 状态等）
 
 ## 安装
@@ -54,40 +54,22 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | `1-9` | 选择对应候选 | `rimel-select-label-keys` |
 | `Space` | 选择第一个候选 | `rimel-confirm-keys` |
 | `Enter` | 英文上屏 / 首选上屏 | `rimel-commit-raw-keys` |
-| `]/=/.`/`PgDn` | 下一页 | `rimel-page-down-keys` |
-| `[/-/,`/`PgUp` | 上一页 | `rimel-page-up-keys` |
+| `C-f` `PgDn` | 下一页 | `rimel-keymap` |
+| `C-b` `PgUp` | 上一页 | `rimel-keymap` |
+| `C-p` `C-n` | 上/下一个 | `rimel-keymap` |
+| `C-k`  | send Shift+delete(从用户词典中删除) | `rimel-keymap` |
 | `Backspace`/`C-h` | 删除最后一个字符 | `rimel-backspace-keys` |
 | `Escape`/`C-g` | 取消输入 | `rimel-cancel-keys` |
 | 其他键 | 退出输入法并执行原按键 | — |
 
-## 配置变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `rimel-schema` | `nil` | Rime 方案 ID（如 `"luna_pinyin_simp"`），nil 用默认 |
-| `rimel-show-candidate` | `'echo-area` | 候选展示方式：`echo-area` 或 `posframe` |
-| `rimel-return-behavior` | `'raw` | Enter 行为：`raw` 英文上屏、`preview` 首选上屏 |
-| `rimel-page-down-keys` | `'(next ?\] ?= ?.)` | 下翻页键（支持 symbol 和 character） |
-| `rimel-page-up-keys` | `'(prior ?\[ ?- ?,)` | 上翻页键 |
-| `rimel-confirm-keys` | `'(?\s)` | 确认键 |
-| `rimel-commit-raw-keys` | `'(return ?\r)` | 提交原始输入键 |
-| `rimel-backspace-keys` | `'(backspace ?\C-? 127 ?\C-h)` | 退格键 |
-| `rimel-cancel-keys` | `'(escape ?\C-g)` | 取消键 |
-| `rimel-select-label-keys` | `'(?1 ... ?9)` | 候选选择键 |
-| `rimel-disable-predicates` | `nil` | 断言列表，任一返回 t 则自动英文 |
-| `rimel-posframe-style` | `'vertical` | Posframe 布局：`vertical` 或 `horizontal` |
-| `rimel-posframe-min-width` | `20` | Posframe 最小宽度 |
 
 ### 按键配置示例
 
 ```elisp
 ;; 使用 C-v / M-v 翻页
-(setq rimel-page-down-keys '(next ?\C-v ?\] ?=))
-(setq rimel-page-up-keys '(prior ?\M-v ?\[ ?-))
+(add-to-list 'rimel-keymap '(?\C-v . "<pagedown>"))
+(add-to-list 'rimel-keymap '(?\M-v . "<pageup>"))
 
-;; 使用 C-n / C-p 翻页
-(setq rimel-page-down-keys '(next ?\C-n))
-(setq rimel-page-up-keys '(prior ?\C-p))
 
 ;; Enter 上屏首选候选而非英文
 (setq rimel-return-behavior 'preview)
@@ -147,14 +129,14 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
       '(pyim-probe-program-mode))
 ```
 
-## 与 emacs-rime、pyim 的对比
+## 与 [emacs-rime](https://github.com/DogLooksGood/emacs-rime)、[pyim](https://github.com/tumashu/pyim) 的对比
 
 ### 架构对比
 
 | | **Rimel** | **emacs-rime** | **pyim + pyim-liberime** |
 |---|---|---|---|
 | **依赖** | liberime | 自带 C 模块 (lib.c) | pyim 框架 + liberime |
-| **代码量** | ~600 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
+| **代码量** | ~700 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
 | **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
 | **候选展示** | echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
