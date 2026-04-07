@@ -87,10 +87,9 @@ When nil, use the default schema configured in Rime."
     (begin  . "<home>"))
   "Alist of (emacs-key . rime-keycode) mappings for candidate navigation.
 
-Common Emacs keys: `right', `left', `next', `prior', `\\C-f', `\\C-b', etc.
+Common Emacs keys: `right', `left', `next', `prior', \\=`\\C-f', \\=`\\C-b', etc.
 
 Value format supports:
-  \"FF52\"  - plain hex keycode
   \"0xFF52\" - plain hex keycode (with 0x prefix)
   \"C-a\"    - Control + a (modifier + key)
   \"M-a\"     - Alt + a
@@ -101,29 +100,12 @@ Value format supports:
   (\"C-a\" \"M-b\") - list of keycodes to try sequentially
 
 Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper)
-Key can be: hex (FF52), char (a), or symbol (<left>)
+Key can be: hex (0xFF52), char (a), or symbol (<left>)
 
-Example:
-  (setq rimel-keymap
-        '((left . \"C-<left>\")
-          (right . \"C-<right>\")
-          (prior . \"<prior>\")
-          (next . \"<next>\")
-          (end . \"<end>\")
-          (begin . \"<home>\")))
-
-Common Emacs keys: `right', `left', `next', `prior', `\\C-f', `\\C-b', etc.
 Common rime keycodes (hex):
 See the hex keycode in https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
 
-The rime-keycode can be a single string, or a list of strings to try sequentially.
-Example:
-  (setq rimel-keymap
-        '((right . \"0xFF2F\")
-          (left  . \"0xFF2F\")
-          (next  . \"0xFF56\")
-          (prior . \"0xFF55\")
-          (right . (\"0xFF53\" \"0xFF2F\"))))"
+The rime-keycode can be a single string, or a list of strings to try sequentially."
   :type '(repeat (cons (sexp :tag "Emacs key")
                        (choice (string :tag "Rime key")
                                (repeat :tag "Rime keys"
@@ -410,9 +392,9 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
         (pcase (substring keycode (match-beginning 1) (match-end 1))
           ("C" (setq modifiers (logior modifiers 4)))
           ("M" (setq modifiers (logior modifiers 8)))
-          ("s" (setq modifiers (logior modifiers (lsh 1 26)))) ; Super
+          ("s" (setq modifiers (logior modifiers (ash 1 26)))) ; Super
           ("S" (setq modifiers (logior modifiers 1)))
-          ("H" (setq modifiers (logior modifiers (lsh 1 27))))) ; Hyper
+          ("H" (setq modifiers (logior modifiers (ash 1 27))))) ; Hyper
         (setq key (substring keycode (match-end 0))))
       (let ((keyval
              (cond
@@ -459,7 +441,7 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
                    ("space" #x0020)
                    ("tab" #xff09)
                    ("escape" #xff1b)
-                   (t (user-error "Unknown key symbol: %s" key)))))
+                   (_ (user-error "Unknown key symbol: %s" key)))))
                  (t (user-error "Invalid key format: %s" key)))))
              (rimel--feed-key keyval modifiers))))))
 
