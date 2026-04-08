@@ -479,8 +479,8 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
                    ("tab" #xff09)
                    ("escape" #xff1b)
                    (_ (user-error "Unknown key symbol: %s" key)))))
-                 (t (user-error "Invalid key format: %s" key)))))
-             (rimel--feed-key keyval modifiers))))))
+              (t (user-error "Invalid key format: %s" key)))))
+        (rimel--feed-key keyval modifiers))))))
 
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
@@ -588,10 +588,10 @@ Return list of characters to insert, or nil."
                 (setq continue nil))
 
                ;; Key mapping via rimel-keymap
-                ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
-                             (rime-keycode (cdr pair)))
-                   (rimel--feed-key-string rime-keycode)
-                   (rimel--update-display)))
+               ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
+                            (rime-keycode (cdr pair)))
+                  (rimel--feed-key-string rime-keycode)
+                  (rimel--update-display)))
 
                ;; Unhandled key - exit composition, push key back
                (t
