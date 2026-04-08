@@ -394,10 +394,11 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 Includes lowercase letters and common Chinese punctuation marks."
   (and (integerp key)
        (or (and (>= key ?a) (<= key ?z))
-           (memq key '(?,  ?\:  ?\;  ?`  ?~  ?<  ?>  ?/  ?\?  ?.  ?-
-                           ?_  ?*  ?\(  ?\)  ?\'  ?\"  ?&  ?%  ?$  ?#  ?!
-                           ?@  ?+  ?=  ?\[  ?\]  ?{  ?}  ?\\  ?|
-                           ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
+           (memq key '(?+ ?= ?- ?_ ?\( ?\) ?* ?& ?^ ?% ?$ ?# ?@ ?! ?` ?~
+                          ?\[ ?\]  ?{  ?}  ?\\  ?|
+                          ?\: ?\; ?\'  ?\"
+                          ?, ?. ?<  ?>  ?/ ?\? 
+                          ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
 
 (defun rimel--event-in-p (event keys)
   "Return non-nil if EVENT is a member of KEYS list.
