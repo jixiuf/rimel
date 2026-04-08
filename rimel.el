@@ -57,7 +57,7 @@ When nil, use the default schema configured in Rime."
 (defcustom rimel-show-candidate
   (or (require 'posframe nil t) 'echo-area)
   "How to display candidates.
-`nil' - don't display candidates
+nil - don't display candidates
 `echo-area' - display in the echo area (default)
 `posframe'  - display in a child frame near cursor (requires posframe package)"
   :type '(choice (const :tag "Echo area" echo-area)
@@ -65,7 +65,7 @@ When nil, use the default schema configured in Rime."
   :group 'rimel)
 
 (defcustom rimel-inline-preedit 'candidate
-  "Set to not nil to enable inline preedit
+  "Set to not nil to enable inline preedit.
 set to \='candidate to inline candidate"
   :type '(choice (const :tag "Inline candidate" candidate)
                  (const :tag "Inline preedit" t)
@@ -128,7 +128,7 @@ set to \='candidate to inline candidate"
     (tab . "<tab>"))
   "Alist of (emacs-key . rime-keycode) mappings for candidate navigation.
 
-Common Emacs keys: `right', `left', `next', `prior', \\=`\\C-f', \\=`\\C-b', etc.
+Common Emacs keys: `right', `left', `next', `prior' etc.
 
 Value format supports:
   \"0xFF52\" - plain hex keycode (with 0x prefix)
@@ -144,7 +144,8 @@ Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper)
 Key can be: hex (0xFF52), char (a), or symbol (<left>)
 
 Common rime keycodes (hex):
-See the hex keycode in https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
+See the hex keycode in
+https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
 
 The rime-keycode can be a single string, or a list of strings to try sequentially."
   :type '(repeat (cons (sexp :tag "Emacs key")
@@ -398,7 +399,7 @@ Includes lowercase letters and common Chinese punctuation marks."
            (memq key '(?+ ?= ?- ?_ ?\( ?\) ?* ?& ?^ ?% ?$ ?# ?@ ?! ?` ?~
                           ?\[ ?\]  ?{  ?}  ?\\  ?|
                           ?\: ?\; ?\'  ?\"
-                          ?, ?. ?<  ?>  ?/ ?\? 
+                          ?, ?. ?<  ?>   ?\? ?/
                           ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
 
 (defun rimel--event-in-p (event keys)
@@ -407,7 +408,8 @@ Works for both character (integer) and symbol events."
   (memq event keys))
 
 (defun rimel--feed-key (key &optional mask)
-  "Send KEY to liberime for processing.  Return non-nil if handled."
+  "Send KEY to liberime for processing.  Return non-nil if handled.
+MASK is an optional modifier mask to apply to the key."
   (if mask
       (liberime-process-key key mask)
     (liberime-process-key key)))
@@ -415,14 +417,14 @@ Works for both character (integer) and symbol events."
 (defun rimel--feed-key-string (keycode)
   "Parse KEYCODE string(s) and feed to rime.
 Supports formats:
-  ?a         - char
-  #xFF52     - hex keycode
-  \"0xFF52\" - plain hex keycode
-  \"C-a\"    - Control + key
-  \"M-a\"    - Alt (Mod1) + key
-  \"S-a\"    - Shift + key
-  \"s-a\"    - Super + key
-  \"H-a\"    - Hyper + key
+  ?a              - char
+  #xFF52          - hex keycode
+  \"0xFF52\"      - plain hex keycode
+  \"C-a\"         - Control plus key
+  \"M-a\"         - Alt (Mod1) plus key
+  \"S-a\"         - Shift plus key
+  \"s-a\"         - Super plus key
+  \"H-a\"         - Hyper plus key
   (\"C-a\" \"M-b\") - list of keycodes to try sequentially
 The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\"."
   (cond
