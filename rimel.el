@@ -56,6 +56,7 @@ When nil, use the default schema configured in Rime."
 
 (defcustom rimel-show-candidate (or (require 'posframe nil t) 'echo-area)
   "How to display candidates.
+`nil' - don't display candidates
 `echo-area' - display in the echo area (default)
 `posframe'  - display in a child frame near cursor (requires posframe package)"
   :type '(choice (const :tag "Echo area" echo-area)
@@ -296,13 +297,13 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
   "Display candidates from CONTEXT using the configured method."
   (pcase rimel-show-candidate
     ('posframe (rimel--posframe-show context))
-    (_ (rimel--echo-area-show context))))
+    ('echo-area (rimel--echo-area-show context))))
 
 (defun rimel--hide-candidates ()
   "Hide the candidate display."
   (pcase rimel-show-candidate
     ('posframe (rimel--posframe-hide))
-    (_ (let ((message-log-max nil)) (message nil)))))
+    ('echo-area (let ((message-log-max nil)) (message nil)))))
 
 ;; Echo area backend
 

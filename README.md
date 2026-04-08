@@ -139,7 +139,7 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 | **代码量** | ~700 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
 | **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
-| **候选展示** | echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
+| **候选展示** | nil/echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
 | **按键处理** | `read-event` 循环（类似 quail） | `overriding-terminal-local-map` | 独立事件系统 |
 
 ### 设计哲学
