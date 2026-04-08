@@ -550,7 +550,11 @@ Return list of characters to insert, or nil."
                ;; Letter keys - continue composition
                ((rimel--composable-key-p event)
                 (let ((commit (rimel--feed-key-and-check event)))
-                  (when commit (setq result commit continue nil))))
+                  (when commit
+                    (when-let* ((input (liberime-get-input)))
+                      (setq unread-command-events
+                            (append (string-to-list input) unread-command-events)))
+                    (setq result commit continue nil))))
 
                ;; Candidate selection by label key (1-9 etc.)
                ((rimel--event-in-p event rimel-select-label-keys)
