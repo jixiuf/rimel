@@ -70,7 +70,37 @@ When nil, use the default schema configured in Rime."
   :type '(choice (const :tag "Raw English" raw)
                  (const :tag "First candidate" preview))
   :group 'rimel)
-
+;; (?,   . #x002c)
+;; (?:   . #x003a)
+;; (?\;  . #x003b)
+;; (?`   . #x0060)
+;; (?~   . #x007e)
+;; (?<   . #x003c)
+;; (?>   . #x003e)
+;; (?/   . #x002f)
+;; (??   . #x003f)
+;; (?.   . #x002e)
+;; (?-   . #x002d)
+;; (?_   . #x005f)
+;; (?*   . #x002a)
+;; (?\(  . #x0028)
+;; (?\)  . #x0029)
+;; (?'   . #x0027)
+;; (?\"  . #x0022)
+;; (?&   . #x0026)
+;; (?%   . #x0025)
+;; (?$   . #x0024)
+;; (?#   . #x0023)
+;; (?!   . #x0021)
+;; (?@   . #x0040)
+;; (?+   . #x002b)
+;; (?=   . #x003d)
+;; (?\[  . #x005b)
+;; (?\]  . #x005d)
+;; (?{   . #x007b)
+;; (?}   . #x007d)
+;; (?\\  . #x005c)
+;; (?|   . #x007c)
 (defcustom rimel-keymap
   '((home   . "<home>")
     (left   . "<left>")
@@ -85,7 +115,8 @@ When nil, use the default schema configured in Rime."
     (?\C-f  . "<pagedown>")
     (?\C-k  . "S-<delete>")
     (end    . "<end>")
-    (begin  . "<home>"))
+    (begin  . "<home>")
+    (tab . "<tab>"))
   "Alist of (emacs-key . rime-keycode) mappings for candidate navigation.
 
 Common Emacs keys: `right', `left', `next', `prior', \\=`\\C-f', \\=`\\C-b', etc.
@@ -352,10 +383,13 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 
 (defun rimel--composable-key-p (key)
   "Return non-nil if KEY should start a rime composition.
-Only lowercase letters start composition."
+Includes lowercase letters and common Chinese punctuation marks."
   (and (integerp key)
-       (>= key ?a)
-       (<= key ?z)))
+       (or (and (>= key ?a) (<= key ?z))
+           (memq key '(?,  ?\:  ?\;  ?`  ?~  ?<  ?>  ?/  ?\?  ?.  ?-
+                           ?_  ?*  ?\(  ?\)  ?\'  ?\"  ?&  ?%  ?$  ?#  ?!
+                           ?@  ?+  ?=  ?\[  ?\]  ?{  ?}  ?\\  ?|
+                           ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
 
 (defun rimel--event-in-p (event keys)
   "Return non-nil if EVENT is a member of KEYS list.
@@ -431,9 +465,11 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
                    ("semicolon" #x003b)
                    ("grave" #x0060)
                    ("less" #x003c)
+                   ("greater" #x003e)
                    ("equal" #x003d)
                    ("slash" #x002f)
                    ("period" #x002e)
+                   ("question" #x003f)
                    ("minus" #x002d)
                    ("plus" #x002b)
                    ("bracketleft" #x005b)
@@ -658,8 +694,9 @@ to detecting $ and \\ prefixes."
 ;;; Registration
 
 ;;;###autoload
-(register-input-method "rimel" "Chinese" #'rimel-activate "中"
-                       "Rime input method via liberime")
+(register-input-method "rimel" "Chinese" #'rimel-activate
+                       (if (char-displayable-p 12563) (char-to-string 12563) "中")
+                       "(Rimel) Rime input method via liberime")
 
 (provide 'rimel)
 
