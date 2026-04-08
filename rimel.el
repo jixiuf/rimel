@@ -1,4 +1,4 @@
-;;; rimel.el --- A lightweight Rime input method for Emacs -*- lexical-binding: t; -*-
+;;; rimel.el --- A lightweight Rime input method -*- lexical-binding: t; -*-
 
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
@@ -54,7 +54,8 @@ When nil, use the default schema configured in Rime."
   :type '(choice (const :tag "Default" nil) string)
   :group 'rimel)
 
-(defcustom rimel-show-candidate (or (require 'posframe nil t) 'echo-area)
+(defcustom rimel-show-candidate
+  (or (require 'posframe nil t) 'echo-area)
   "How to display candidates.
 `nil' - don't display candidates
 `echo-area' - display in the echo area (default)
@@ -65,7 +66,7 @@ When nil, use the default schema configured in Rime."
 
 (defcustom rimel-inline-preedit 'candidate
   "Set to not nil to enable inline preedit
-set to 'candidate to inline candidate"
+set to \='candidate to inline candidate"
   :type '(choice (const :tag "Inline candidate" candidate)
                  (const :tag "Inline preedit" t)
                  (const :tag "Disable inline preedit" nil))
