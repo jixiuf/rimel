@@ -518,7 +518,14 @@ This function serves as `input-method-function'."
   (setq rimel--current-input-key key)
   (if (or buffer-read-only
           (not (rimel--composable-key-p key))
-          (not (rimel--should-enable-p)))
+          (not (rimel--should-enable-p))
+          ;; When an overriding keymap is active (e.g., `set-transient-map'
+          ;; used by spatial-window, avy, etc.), pass the key through if
+          ;; it has a binding there.  This matches quail's behavior per
+          ;; Emacs bug#68338.
+          (and overriding-terminal-local-map
+               (lookup-key overriding-terminal-local-map (vector key)))
+          overriding-local-map)
       (list key)
     ;; Start composition
     (liberime-clear-composition)
