@@ -518,7 +518,12 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
   "Process KEY through rimel input method.
 This function serves as `input-method-function'."
   (setq rimel--current-input-key key)
-  (if (or buffer-read-only
+  ;; form quail-input-method
+  (if (or (and (or buffer-read-only
+                   (and (get-char-property (point) 'read-only)
+                        (get-char-property (point) 'front-sticky)))
+	           (not (or inhibit-read-only
+			            (get-char-property (point) 'inhibit-read-only))))
           (not (rimel--composable-key-p key))
           (not (rimel--should-enable-p))
           ;; When an overriding keymap is active (e.g., `set-transient-map'
