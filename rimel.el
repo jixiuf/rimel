@@ -63,6 +63,14 @@ When nil, use the default schema configured in Rime."
                  (const :tag "Posframe" posframe))
   :group 'rimel)
 
+(defcustom rimel-inline-preedit 'candidate
+  "Set to not nil to enable inline preedit
+set to 'candidate to inline candidate"
+  :type '(choice (const :tag "Inline candidate" candidate)
+                 (const :tag "Inline preedit" t)
+                 (const :tag "Disable inline preedit" nil))
+  :group 'rimel)
+
 (defcustom rimel-return-behavior 'raw
   "Behavior of Enter key during composition.
 `raw'     - commit the raw input as English (e.g., \"nihao\")
@@ -523,7 +531,11 @@ This function serves as `input-method-function'."
 (defun rimel--update-display ()
   "Update preedit overlay and echo area candidates from current rime state."
   (let ((ctx (liberime-get-context)))
-    (rimel--show-preedit (alist-get 'preedit (alist-get 'composition ctx)))
+    (cond
+     ((eq rimel-inline-preedit 'candidate)
+      (rimel--show-preedit (alist-get 'commit-text-preview ctx)))
+     ((eq rimel-inline-preedit t)
+      (rimel--show-preedit (alist-get 'preedit (alist-get 'composition ctx)))))
     (rimel--show-candidates ctx)))
 
 (defun rimel--feed-key-and-check (key)
