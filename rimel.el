@@ -293,16 +293,18 @@ _NAME is the input method name (unused)."
   "Display PREEDIT string as overlay at point."
   (rimel--clear-preedit)
   (when (and preedit (not (string-empty-p preedit)))
-    (let ((ov (make-overlay (point) (point) nil t t)))
+    (let* ((pos (if (> (point) (point-min)) (1- (point)) (point)))
+           (surrounding-face (plist-get (text-properties-at pos) 'face))
+           ;; When there is text after point, after-string inherits
+           ;; surrounding face automatically -- only use rimel-preedit-face
+           ;; to avoid :height stacking.
+           ;; At eol, after-string does NOT inherit, so merge surrounding-face.
+           (face (if (and surrounding-face (eolp))
+                     (cons 'rimel-preedit-face surrounding-face)
+                   'rimel-preedit-face))
+           (ov (make-overlay (point) (point) nil t t)))
       (overlay-put ov 'rimel t)
-      (overlay-put ov 'after-string
-                   (propertize preedit 'face
-                               (cons 'rimel-preedit-face
-                                     (plist-get (text-properties-at
-                                                 (if (> (point) (point-min))
-                                                     (1- (point))
-                                                   (point)))
-                                                'face))))
+      (overlay-put ov 'after-string (propertize preedit 'face face))
       (setq rimel--preedit-overlay ov))))
 
 (defun rimel--clear-preedit ()
