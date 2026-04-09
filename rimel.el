@@ -222,6 +222,13 @@ Example:
   "Face for the highlighted candidate."
   :group 'rimel)
 
+(defcustom rimel-highlight-first nil
+  "When non-nil, move the highlighted candidate to the first position.
+For example, if candidates are [a b c d e] and c is highlighted,
+display as [c d e a b]."
+  :type 'boolean
+  :group 'rimel)
+
 (defcustom rimel-posframe-style 'vertical
   "Candidate layout style in posframe.
 `vertical'   - one candidate per line
@@ -320,18 +327,22 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          (sep (or separator " ")))
     (when candidates
       (let ((parts '())
-            (idx 0))
+            (idx 0)
+            (candidates-list (if (and rimel-highlight-first (> highlighted 0))
+                                  (append (nthcdr highlighted candidates)
+                                          (cl-subseq candidates 0 highlighted))
+                                candidates)))
         ;; Preedit (only for echo-area, posframe has overlay)
         (when (and show-preedit preedit)
           (push (format "[%s]" preedit) parts))
         ;; Candidates
-        (dolist (cand candidates)
+        (dolist (cand candidates-list)
           (let* ((label (nth idx rimel-select-label-keys))
                  (label-str (if label (format "%c." label) (format "%d." (1+ idx))))
                  (comment (get-text-property 0 :comment cand))
                  (text (if comment (format "%s(%s)" cand comment) cand))
                  (item (format "%s%s" label-str text)))
-            (push (if (eql idx highlighted)
+            (push (if (eql idx 0)
                       (propertize item 'face 'rimel-highlight-face)
                     item)
                   parts))
