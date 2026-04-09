@@ -567,7 +567,8 @@ This function serves as `input-method-function'."
   "Main composition loop.  Read events until composition finishes.
 Return list of characters to insert, or nil."
   (let ((result nil)
-        (continue t))
+        (continue t)
+        (echo-keystrokes 0))
     (unwind-protect
         (progn
           (rimel--update-display)
