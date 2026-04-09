@@ -288,7 +288,14 @@ _NAME is the input method name (unused)."
   (when (and preedit (not (string-empty-p preedit)))
     (let ((ov (make-overlay (point) (point) nil t t)))
       (overlay-put ov 'rimel t)
-      (overlay-put ov 'after-string (propertize preedit 'face 'rimel-preedit-face))
+      (overlay-put ov 'after-string
+                   (propertize preedit 'face
+                               (cons 'rimel-preedit-face
+                                     (plist-get (text-properties-at
+                                                 (if (> (point) (point-min))
+                                                     (1- (point))
+                                                   (point)))
+                                                'face))))
       (setq rimel--preedit-overlay ov))))
 
 (defun rimel--clear-preedit ()
