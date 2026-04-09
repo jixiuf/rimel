@@ -729,7 +729,7 @@ to detecting $ and \\ prefixes."
 ;;;###autoload
 (register-input-method "rimel" "Chinese" #'rimel-activate
                        (if (char-displayable-p 12563) (char-to-string 12563) "中")
-                       "(Rimel) Rime input method via liberime")
+                       "Rimel - Rime input method via liberime")
 
 (provide 'rimel)
 
