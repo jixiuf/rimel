@@ -166,7 +166,7 @@ Behavior is controlled by `rimel-return-behavior'."
   :type '(repeat sexp)
   :group 'rimel)
 
-(defcustom rimel-backspace-keys '(backspace ?\C-? 127 ?\C-h)
+(defcustom rimel-backspace-keys '(backspace ?\C-? 127)
   "Keys for deleting the last input character during composition."
   :type '(repeat sexp)
   :group 'rimel)
@@ -535,7 +535,8 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
 (defun rimel--select-candidate (idx)
   "Select candidate at IDX (0-based).  Return committed text or nil."
   (liberime-select-candidate idx)
-  (rimel--get-commit))
+  (or (rimel--get-commit)
+      (rimel--update-display)))
 
 (defun rimel-input-method (key)
   "Process KEY through rimel input method.
@@ -575,16 +576,25 @@ This function serves as `input-method-function'."
       (rimel--show-preedit (alist-get 'commit-text-preview ctx)))
      ((eq rimel-inline-preedit t)
       (rimel--show-preedit (alist-get 'preedit (alist-get 'composition ctx)))))
-    (rimel--show-candidates ctx)))
+    (rimel--show-candidates ctx))
+  nil)
 
+(defun rimel--check-commit ()
+  "Return committed text if any, otherwise update display."
+  (let ((commit (rimel--get-commit)))
+    (if commit
+        (progn
+          (when-let* ((input (liberime-get-input)))
+            (setq unread-command-events
+                  (append (string-to-list input) unread-command-events)))
+          commit)
+      (rimel--update-display)
+      nil))
+  )
 (defun rimel--feed-key-and-check (key)
   "Send KEY to rime.  Return committed text if any, otherwise update display."
   (rimel--feed-key key)
-  (let ((commit (rimel--get-commit)))
-    (if commit
-        commit
-      (rimel--update-display)
-      nil)))
+  (rimel--check-commit))
 
 (defun rimel--composition-loop ()
   "Main composition loop.  Read events until composition finishes.
@@ -601,26 +611,20 @@ Return list of characters to insert, or nil."
               (cond
                ;; Letter keys - continue composition
                ((rimel--composable-key-p event)
-                (let ((commit (rimel--feed-key-and-check event)))
-                  (when commit
-                    (when-let* ((input (liberime-get-input)))
-                      (setq unread-command-events
-                            (append (string-to-list input) unread-command-events)))
-                    (setq result commit continue nil))))
+                (when-let* ((commit (rimel--feed-key-and-check event)))
+                  (setq result commit continue nil)))
 
                ;; Candidate selection by label key (1-9 etc.)
                ((rimel--event-in-p event rimel-select-label-keys)
-                (let* ((pos (cl-position event rimel-select-label-keys))
-                       (commit (rimel--select-candidate pos)))
-                  (if commit
-                      (setq result commit continue nil)
-                    (rimel--update-display))))
+                (when-let* ((pos (cl-position event rimel-select-label-keys))
+                            (commit (rimel--select-candidate pos)))
+                  (setq result commit continue nil)))
 
                ;; Confirm key (space etc.) - send to rime
                ((rimel--event-in-p event rimel-confirm-keys)
-                (let ((commit (rimel--feed-key-and-check
-                               (if (integerp event) event ?\s))))
-                  (when commit (setq result commit continue nil))))
+                (when-let* ((commit (rimel--feed-key-and-check
+                                     (if (integerp event) event ?\s))))
+                  (setq result commit continue nil)))
 
                ;; Commit raw input (enter etc.)
                ((rimel--event-in-p event rimel-commit-raw-keys)
@@ -643,7 +647,8 @@ Return list of characters to insert, or nil."
                ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
                             (rime-keycode (cdr pair)))
                   (rimel--feed-key-string rime-keycode)
-                  (rimel--update-display)))
+                  (when-let* ((commit (rimel--check-commit)))
+                    (setq result commit continue nil))))
 
                ;; Unhandled key - exit composition, push key back
                (t
