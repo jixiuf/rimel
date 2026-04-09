@@ -1,0 +1,856 @@
+;;; rimel-test.el --- Tests for rimel -*- lexical-binding: t; -*-
+
+;;; Commentary:
+
+;; Run with:
+;;   emacs --batch -Q -L . -L test -l ert -l test/rimel-test.el -f rimel-test-run
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+
+;; -----------------------------------------------------------------------
+;; Mock liberime — stub out the C dynamic module for pure Elisp testing
+;; -----------------------------------------------------------------------
+
+(defvar rimel-test--rime-input ""
+  "Simulated rime input buffer.")
+
+(defvar rimel-test--rime-committed nil
+  "Simulated committed text, or nil.")
+
+(defvar rimel-test--rime-candidates nil
+  "Simulated candidate list for the current page.")
+
+(defvar rimel-test--rime-highlighted 0
+  "Simulated highlighted candidate index.")
+
+(defvar rimel-test--rime-page 0
+  "Simulated page number.")
+
+(defvar rimel-test--rime-last-page t
+  "Simulated last-page flag.")
+
+(defvar rimel-test--rime-preedit nil
+  "Simulated preedit string.")
+
+(defvar rimel-test--rime-commit-preview nil
+  "Simulated commit-text-preview.")
+
+(defvar rimel-test--rime-schema nil
+  "Last schema selected.")
+
+(defvar rimel-test--process-key-hook nil
+  "Hook called with (key mask) on each process-key call.
+Can be set in tests to simulate rime behavior.")
+
+(defun rimel-test--reset-rime ()
+  "Reset all mock rime state."
+  (setq rimel-test--rime-input ""
+        rimel-test--rime-committed nil
+        rimel-test--rime-candidates nil
+        rimel-test--rime-highlighted 0
+        rimel-test--rime-page 0
+        rimel-test--rime-last-page t
+        rimel-test--rime-preedit nil
+        rimel-test--rime-commit-preview nil
+        rimel-test--rime-schema nil
+        rimel-test--process-key-hook nil))
+
+;; Provide the liberime feature so (require 'liberime) succeeds
+(unless (featurep 'liberime)
+  (defun liberime-process-key (key &optional mask)
+    "Mock: append KEY to input buffer, run hook."
+    (when (and (integerp key) (>= key ?a) (<= key ?z))
+      (setq rimel-test--rime-input
+            (concat rimel-test--rime-input (char-to-string key))))
+    (when rimel-test--process-key-hook
+      (funcall rimel-test--process-key-hook key (or mask 0)))
+    t)
+
+  (defun liberime-get-context ()
+    "Mock: return a simulated context alist."
+    (when (or rimel-test--rime-candidates
+              rimel-test--rime-preedit)
+      `((composition . ((preedit . ,rimel-test--rime-preedit)))
+        (commit-text-preview . ,rimel-test--rime-commit-preview)
+        (menu . ((candidates . ,rimel-test--rime-candidates)
+                 (highlighted-candidate-index . ,rimel-test--rime-highlighted)
+                 (page-no . ,rimel-test--rime-page)
+                 (last-page-p . ,rimel-test--rime-last-page))))))
+
+  (defun liberime-get-commit ()
+    "Mock: return and clear committed text."
+    (prog1 rimel-test--rime-committed
+      (setq rimel-test--rime-committed nil)))
+
+  (defun liberime-get-input ()
+    "Mock: return the current input buffer."
+    rimel-test--rime-input)
+
+  (defun liberime-clear-composition ()
+    "Mock: clear input buffer."
+    (setq rimel-test--rime-input ""
+          rimel-test--rime-preedit nil
+          rimel-test--rime-commit-preview nil
+          rimel-test--rime-candidates nil))
+
+  (defun liberime-select-candidate (idx)
+    "Mock: select candidate at IDX."
+    (when (and rimel-test--rime-candidates
+               (< idx (length rimel-test--rime-candidates)))
+      (setq rimel-test--rime-committed
+            (nth idx rimel-test--rime-candidates))
+      (liberime-clear-composition)))
+
+  (defun liberime-workable-p ()
+    "Mock: always workable."
+    t)
+
+  (defun liberime-load ()
+    "Mock: no-op."
+    nil)
+
+  (defun liberime-try-select-schema (schema)
+    "Mock: record selected schema."
+    (setq rimel-test--rime-schema schema))
+
+  (defun liberime-select-schema-interactive ()
+    "Mock: no-op."
+    (interactive)
+    nil)
+
+  (defun liberime-deploy ()
+    "Mock: no-op."
+    (interactive)
+    nil)
+
+  (defun liberime-sync ()
+    "Mock: no-op."
+    (interactive)
+    nil)
+
+  (provide 'liberime))
+
+(require 'rimel)
+
+;; -----------------------------------------------------------------------
+;; Test runner
+;; -----------------------------------------------------------------------
+
+(defun rimel-test-run ()
+  "Run all rimel ERT tests and exit with appropriate status."
+  (ert-run-tests-batch-and-exit "^rimel-test-"))
+
+;; -----------------------------------------------------------------------
+;; Test: composable-key-p
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-composable-key-lowercase ()
+  "Lowercase letters should be composable."
+  (should (rimel--composable-key-p ?a))                    ; a
+  (should (rimel--composable-key-p ?z))                    ; z
+  (should (rimel--composable-key-p ?m)))                   ; m
+
+(ert-deftest rimel-test-composable-key-uppercase ()
+  "Uppercase letters should not be composable."
+  (should-not (rimel--composable-key-p ?A))                ; A
+  (should-not (rimel--composable-key-p ?Z)))               ; Z
+
+(ert-deftest rimel-test-composable-key-digits ()
+  "Digits should not be composable."
+  (should-not (rimel--composable-key-p ?0))                ; 0
+  (should-not (rimel--composable-key-p ?9)))               ; 9
+
+(ert-deftest rimel-test-composable-key-punctuation ()
+  "Chinese punctuation should be composable."
+  (should (rimel--composable-key-p ?,))                    ; comma
+  (should (rimel--composable-key-p ?.))                    ; period
+  (should (rimel--composable-key-p ?/))                    ; slash
+  (should (rimel--composable-key-p ?\\))                   ; backslash
+  (should (rimel--composable-key-p ?\[))                   ; left bracket
+  (should (rimel--composable-key-p ?\]))                   ; right bracket
+  (should (rimel--composable-key-p ?~)))                   ; tilde
+
+(ert-deftest rimel-test-composable-key-non-composable ()
+  "Control keys and symbols should not be composable."
+  (should-not (rimel--composable-key-p ?\t))               ; tab
+  (should-not (rimel--composable-key-p ?\r))               ; return
+  (should-not (rimel--composable-key-p ?\C-a))             ; C-a
+  (should-not (rimel--composable-key-p nil)))              ; nil
+
+;; -----------------------------------------------------------------------
+;; Test: event-in-p
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-event-in-p ()
+  "Test event membership in key lists."
+  (should (rimel--event-in-p ?a '(?a ?b ?c)))              ; char in list
+  (should-not (rimel--event-in-p ?d '(?a ?b ?c)))          ; char not in list
+  (should (rimel--event-in-p 'return '(return ?\r)))        ; symbol in list
+  (should (rimel--event-in-p 'escape '(escape ?\C-g)))     ; escape in cancel keys
+  (should-not (rimel--event-in-p 'up '(escape ?\C-g))))    ; up not in cancel keys
+
+;; -----------------------------------------------------------------------
+;; Test: format-candidates
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-format-candidates-basic ()
+  "Test basic candidate formatting."
+  (let ((ctx '((composition . ((preedit . "ni")))
+               (menu . ((candidates . ("你" "妮" "尼" "泥" "逆"))
+                        (highlighted-candidate-index . 0)
+                        (page-no . 0)
+                        (last-page-p . nil))))))
+    (let ((result (rimel--format-candidates ctx)))
+      (should (stringp result))                            ; returns string
+      (should (string-match-p "1\\.你" result))            ; first candidate
+      (should (string-match-p "2\\.妮" result))            ; second candidate
+      (should (string-match-p "(1\\+)" result)))))          ; page indicator (not last)
+
+(ert-deftest rimel-test-format-candidates-last-page ()
+  "Test candidate formatting on the last page."
+  (let ((ctx '((composition . ((preedit . "ni")))
+               (menu . ((candidates . ("你"))
+                        (highlighted-candidate-index . 0)
+                        (page-no . 2)
+                        (last-page-p . t))))))
+    (let ((result (rimel--format-candidates ctx)))
+      (should (string-match-p "(3)" result)))))            ; page 3, last page
+
+(ert-deftest rimel-test-format-candidates-with-preedit ()
+  "Test candidate formatting with preedit display."
+  (let ((ctx '((composition . ((preedit . "ni")))
+               (menu . ((candidates . ("你"))
+                        (highlighted-candidate-index . 0)
+                        (page-no . 0)
+                        (last-page-p . t))))))
+    (let ((result (rimel--format-candidates ctx " " t)))
+      (should (string-match-p "\\[ni\\]" result)))))       ; preedit shown
+
+(ert-deftest rimel-test-format-candidates-nil ()
+  "Test formatting returns nil when no candidates."
+  (should-not (rimel--format-candidates nil))              ; nil context
+  (should-not (rimel--format-candidates                    ; no candidates
+               '((menu . ((candidates . nil)))))))
+
+(ert-deftest rimel-test-format-candidates-vertical-separator ()
+  "Test candidate formatting with vertical (newline) separator."
+  (let ((ctx '((composition . ((preedit . "ni")))
+               (menu . ((candidates . ("你" "妮"))
+                        (highlighted-candidate-index . 0)
+                        (page-no . 0)
+                        (last-page-p . t))))))
+    (let ((result (rimel--format-candidates ctx "\n")))
+      (should (string-match-p "\n" result)))))             ; newline separator used
+
+;; -----------------------------------------------------------------------
+;; Test: format-candidates with highlight-first
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-format-candidates-highlight-first ()
+  "Test that rimel-highlight-first rotates candidates."
+  (let ((rimel-highlight-first t)
+        (ctx '((composition . ((preedit . "ni")))
+               (menu . ((candidates . ("a" "b" "c" "d" "e"))
+                        (highlighted-candidate-index . 2)
+                        (page-no . 0)
+                        (last-page-p . t))))))
+    (let ((result (rimel--format-candidates ctx)))
+      ;; With highlighted=2, rotation should put "c" first
+      (should (string-match-p "^1\\.c" result)))))         ; c is first after rotation
+
+;; -----------------------------------------------------------------------
+;; Test: format-candidates with candidate comment
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-format-candidates-comment ()
+  "Test that candidate comments are displayed."
+  (let* ((cand (propertize "你" :comment "nǐ"))
+         (ctx `((composition . ((preedit . "ni")))
+                (menu . ((candidates . (,cand))
+                         (highlighted-candidate-index . 0)
+                         (page-no . 0)
+                         (last-page-p . t))))))
+    (let ((result (rimel--format-candidates ctx)))
+      (should (string-match-p "你(nǐ)" result)))))         ; comment shown
+
+;; -----------------------------------------------------------------------
+;; Test: preedit overlay
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-show-preedit ()
+  "Test preedit overlay creation and display."
+  (with-temp-buffer
+    (insert "hello ")
+    (rimel--show-preedit "你好")
+    (should (overlayp rimel--preedit-overlay))              ; overlay created
+    (should (equal "你好"                                   ; overlay content
+                   (let ((as (overlay-get rimel--preedit-overlay 'after-string)))
+                     (substring-no-properties as))))
+    ;; Clear
+    (rimel--clear-preedit)
+    (should-not rimel--preedit-overlay)))                   ; overlay removed
+
+(ert-deftest rimel-test-show-preedit-empty ()
+  "Test that empty preedit does not create overlay."
+  (with-temp-buffer
+    (insert "hello ")
+    (rimel--show-preedit "")
+    (should-not rimel--preedit-overlay)                    ; no overlay for empty
+    (rimel--show-preedit nil)
+    (should-not rimel--preedit-overlay)))                   ; no overlay for nil
+
+(ert-deftest rimel-test-preedit-face ()
+  "Test that preedit overlay uses rimel-preedit-face."
+  (with-temp-buffer
+    (insert "hello ")
+    (rimel--show-preedit "nihao")
+    (let* ((as (overlay-get rimel--preedit-overlay 'after-string))
+           (face (get-text-property 0 'face as)))
+      (should (eq face 'rimel-preedit-face)))              ; preedit face applied
+    (rimel--clear-preedit)))
+
+;; -----------------------------------------------------------------------
+;; Test: clear-state
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-clear-state ()
+  "Test that clear-state resets everything."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (insert "hello ")
+    (rimel--show-preedit "test")
+    (should (overlayp rimel--preedit-overlay))             ; overlay exists before clear
+    (rimel--clear-state)
+    (should-not rimel--preedit-overlay)                    ; overlay removed after clear
+    (should (string-equal rimel-test--rime-input ""))))     ; rime input cleared
+
+;; -----------------------------------------------------------------------
+;; Test: predicates
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-predicate-prog-in-code ()
+  "Test prog-in-code predicate."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "(defun foo ()")
+    ;; In code — should return non-nil (disable Chinese)
+    (should (rimel-predicate-prog-in-code-p))              ; in code region
+
+    ;; In a string — should return nil (enable Chinese)
+    (insert "\n  \"")
+    (should-not (rimel-predicate-prog-in-code-p))          ; in string
+
+    ;; In a comment — should return nil (enable Chinese)
+    (erase-buffer)
+    (insert "; comment")
+    (should-not (rimel-predicate-prog-in-code-p))))        ; in comment
+
+(ert-deftest rimel-test-predicate-prog-in-code-non-prog ()
+  "Test prog-in-code predicate returns nil in non-prog modes."
+  (with-temp-buffer
+    (fundamental-mode)
+    (insert "some text")
+    (should-not (rimel-predicate-prog-in-code-p))))        ; non-prog mode
+
+(ert-deftest rimel-test-predicate-after-alphabet ()
+  "Test after-alphabet-char predicate."
+  (with-temp-buffer
+    (insert "hello")
+    (should (rimel-predicate-after-alphabet-char-p))       ; after letter
+    (insert " ")
+    (should-not (rimel-predicate-after-alphabet-char-p))   ; after space
+    (insert "123")
+    (should-not (rimel-predicate-after-alphabet-char-p))   ; after digit
+    (insert "Z")
+    (should (rimel-predicate-after-alphabet-char-p))))     ; after uppercase
+
+(ert-deftest rimel-test-predicate-after-ascii ()
+  "Test after-ascii-char predicate."
+  (with-temp-buffer
+    (insert "a")
+    (should (rimel-predicate-after-ascii-char-p))          ; after letter
+    (insert "1")
+    (should (rimel-predicate-after-ascii-char-p))          ; after digit
+    (insert ".")
+    (should (rimel-predicate-after-ascii-char-p))          ; after punctuation
+    (erase-buffer)
+    (insert " ")
+    (should-not (rimel-predicate-after-ascii-char-p))      ; space is not in range
+    (erase-buffer)
+    (should-not (rimel-predicate-after-ascii-char-p))))    ; empty buffer
+
+(ert-deftest rimel-test-predicate-uppercase ()
+  "Test uppercase-letter predicate."
+  (let ((rimel--current-input-key ?A))
+    (should (rimel-predicate-current-uppercase-letter-p))) ; uppercase A
+  (let ((rimel--current-input-key ?Z))
+    (should (rimel-predicate-current-uppercase-letter-p))) ; uppercase Z
+  (let ((rimel--current-input-key ?a))
+    (should-not (rimel-predicate-current-uppercase-letter-p))) ; lowercase
+  (let ((rimel--current-input-key nil))
+    (should-not (rimel-predicate-current-uppercase-letter-p)))) ; nil
+
+(ert-deftest rimel-test-predicate-evil-mode ()
+  "Test evil-mode predicate when evil is not loaded."
+  ;; When evil is not loaded, fboundp returns nil
+  (unless (fboundp 'evil-normal-state-p)
+    (should-not (rimel-predicate-evil-mode-p))))           ; no evil: nil
+
+;; -----------------------------------------------------------------------
+;; Test: should-enable-p
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-should-enable-p ()
+  "Test the should-enable-p wrapper."
+  (let ((rimel-disable-predicates nil))
+    (should (rimel--should-enable-p)))                     ; no predicates: enabled
+  (let ((rimel-disable-predicates (list (lambda () nil))))
+    (should (rimel--should-enable-p)))                     ; predicate returns nil: enabled
+  (let ((rimel-disable-predicates (list (lambda () t))))
+    (should-not (rimel--should-enable-p)))                 ; predicate returns t: disabled
+  (let ((rimel-disable-predicates
+         (list (lambda () nil) (lambda () t))))
+    (should-not (rimel--should-enable-p))))                ; any returns t: disabled
+
+;; -----------------------------------------------------------------------
+;; Test: feed-key-string parsing
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-feed-key-string-hex ()
+  "Test feeding hex keycodes."
+  (rimel-test--reset-rime)
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'rimel--feed-key)
+               (lambda (key mask) (push (cons key mask) calls))))
+      (rimel--feed-key-string "0xFF52")
+      (should (equal '((#xff52 . 0)) calls)))))            ; hex keycode parsed
+
+(ert-deftest rimel-test-feed-key-string-single-char ()
+  "Test feeding single character keycodes."
+  (rimel-test--reset-rime)
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'rimel--feed-key)
+               (lambda (key mask) (push (cons key mask) calls))))
+      (rimel--feed-key-string "a")
+      (should (equal (car (car calls)) ?a)))))             ; char a parsed
+
+(ert-deftest rimel-test-feed-key-string-symbol ()
+  "Test feeding symbol keycodes."
+  (rimel-test--reset-rime)
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'rimel--feed-key)
+               (lambda (key mask) (push (cons key mask) calls))))
+      (rimel--feed-key-string "<left>")
+      (should (equal (car (car calls)) #xff51))            ; Left key symbol
+      (setq calls nil)
+      (rimel--feed-key-string "<return>")
+      (should (equal (car (car calls)) #xff0d))            ; Return key symbol
+      (setq calls nil)
+      (rimel--feed-key-string "<backspace>")
+      (should (equal (car (car calls)) #xff08))            ; Backspace key symbol
+      (setq calls nil)
+      (rimel--feed-key-string "<escape>")
+      (should (equal (car (car calls)) #xff1b)))))         ; Escape key symbol
+
+(ert-deftest rimel-test-feed-key-string-modifiers ()
+  "Test feeding keycodes with modifiers."
+  (rimel-test--reset-rime)
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'rimel--feed-key)
+               (lambda (key mask) (push (cons key mask) calls))))
+      (rimel--feed-key-string "C-a")
+      (should (equal (cdar calls) 4))                      ; Control modifier = 4
+      (setq calls nil)
+      (rimel--feed-key-string "M-a")
+      (should (equal (cdar calls) 8))                      ; Alt/Meta modifier = 8
+      (setq calls nil)
+      (rimel--feed-key-string "S-a")
+      (should (equal (cdar calls) 1)))))                   ; Shift modifier = 1
+
+(ert-deftest rimel-test-feed-key-string-list ()
+  "Test feeding a list of keycodes."
+  (rimel-test--reset-rime)
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'rimel--feed-key)
+               (lambda (key mask) (push (cons key mask) calls))))
+      (rimel--feed-key-string '("C-a" "M-b"))
+      (should (equal (length calls) 2)))))                 ; two keys fed
+
+(ert-deftest rimel-test-feed-key-string-unknown-symbol ()
+  "Test that unknown symbols signal an error."
+  (rimel-test--reset-rime)
+  (should-error (rimel--feed-key-string "<xyzzy>")))       ; unknown symbol errors
+
+;; -----------------------------------------------------------------------
+;; Test: commit-raw
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-commit-raw ()
+  "Test raw input commit."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "nihao")
+  (let ((rimel-return-behavior 'raw))
+    (let ((result (rimel--commit-raw)))
+      (should (equal "nihao" result))                      ; raw input committed
+      (should (string-equal rimel-test--rime-input "")))))  ; input cleared
+
+(ert-deftest rimel-test-commit-raw-preview ()
+  "Test preview commit."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "nihao"
+        rimel-test--rime-preedit "ni hao"
+        rimel-test--rime-commit-preview "你好"
+        rimel-test--rime-candidates '("你好" "你号"))
+  (let ((rimel-return-behavior 'preview))
+    (let ((result (rimel--commit-raw)))
+      (should (equal "你好" result)))))                     ; preview committed
+
+;; -----------------------------------------------------------------------
+;; Test: get-commit
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-get-commit ()
+  "Test get-commit returns committed text."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-committed "你好")
+  (should (equal "你好" (rimel--get-commit)))               ; returns commit
+  (should-not (rimel--get-commit)))                         ; second call returns nil
+
+(ert-deftest rimel-test-get-commit-empty ()
+  "Test get-commit returns nil for empty commit."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-committed "")
+  (should-not (rimel--get-commit))                         ; empty string returns nil
+  (setq rimel-test--rime-committed nil)
+  (should-not (rimel--get-commit)))                        ; nil returns nil
+
+;; -----------------------------------------------------------------------
+;; Test: select-candidate
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-select-candidate ()
+  "Test candidate selection."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-candidates '("你" "妮" "尼"))
+  (let ((result (rimel--select-candidate 1)))
+    (should (equal "妮" result))))                          ; second candidate selected
+
+;; -----------------------------------------------------------------------
+;; Test: activation and deactivation
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-activate ()
+  "Test input method activation."
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (should (eq input-method-function #'rimel-input-method)) ; function set
+    (should (eq deactivate-current-input-method-function
+                #'rimel-deactivate))))                      ; deactivate function set
+
+(ert-deftest rimel-test-deactivate ()
+  "Test input method deactivation."
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (rimel-deactivate)
+    (should-not (local-variable-p 'input-method-function)))) ; local var removed
+
+(ert-deftest rimel-test-activate-with-schema ()
+  "Test activation with a custom schema."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (let ((rimel-schema "luna_pinyin_simp"))
+      (rimel-activate "rimel")
+      (should (equal "luna_pinyin_simp"                     ; schema selected
+                     rimel-test--rime-schema)))))
+
+;; -----------------------------------------------------------------------
+;; Test: input-method skip conditions
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-input-method-non-composable ()
+  "Test that non-composable keys pass through."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (should (equal '(?1) (rimel-input-method ?1)))         ; digit passes through
+    (should (equal '(?A) (rimel-input-method ?A)))))       ; uppercase passes through
+
+(ert-deftest rimel-test-input-method-read-only ()
+  "Test that keys pass through in read-only buffers."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (setq buffer-read-only t)
+    (should (equal '(?a) (rimel-input-method ?a)))))       ; key passes through
+
+(ert-deftest rimel-test-input-method-predicate-disabled ()
+  "Test that keys pass through when predicates disable input."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (let ((rimel-disable-predicates (list (lambda () t))))
+      (should (equal '(?a) (rimel-input-method ?a))))))    ; predicate disables
+
+;; -----------------------------------------------------------------------
+;; Test: input-method immediate commit
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-input-method-immediate-commit ()
+  "Test immediate commit (e.g., auto-select by rime)."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    ;; Simulate: rime auto-commits on first key
+    (setq rimel-test--process-key-hook
+          (lambda (_key _mask)
+            (setq rimel-test--rime-committed "，")))
+    (let ((result (rimel-input-method ?,)))
+      (should (equal '(?，) result)))))                     ; immediate commit
+
+;; -----------------------------------------------------------------------
+;; Test: input method registered
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-registered ()
+  "Test that rimel is registered as an input method."
+  (let ((im (assoc "rimel" input-method-alist)))
+    (should im)                                            ; registered
+    (should (equal "Chinese" (nth 1 im)))))                ; language is Chinese
+
+;; -----------------------------------------------------------------------
+;; Test: defcustom defaults
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-default-confirm-keys ()
+  "Test default confirm keys include space."
+  (should (memq ?\s rimel-confirm-keys)))                  ; space in confirm keys
+
+(ert-deftest rimel-test-default-cancel-keys ()
+  "Test default cancel keys."
+  (should (memq 'escape rimel-cancel-keys))                ; escape in cancel keys
+  (should (memq ?\C-g rimel-cancel-keys)))                 ; C-g in cancel keys
+
+(ert-deftest rimel-test-default-backspace-keys ()
+  "Test default backspace keys."
+  (should (memq 'backspace rimel-backspace-keys))          ; backspace symbol
+  (should (memq 127 rimel-backspace-keys)))                ; DEL char
+
+(ert-deftest rimel-test-default-select-label-keys ()
+  "Test default select label keys are 1-9."
+  (should (equal '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9)
+                 rimel-select-label-keys)))                 ; 1-9
+
+(ert-deftest rimel-test-default-return-behavior ()
+  "Test default return behavior is raw."
+  (should (eq 'raw rimel-return-behavior)))                ; default raw
+
+;; -----------------------------------------------------------------------
+;; Test: rimel-keymap entries
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-keymap-entries ()
+  "Test that rimel-keymap has expected entries."
+  (should (assq 'up rimel-keymap))                         ; up key mapped
+  (should (assq 'down rimel-keymap))                       ; down key mapped
+  (should (assq 'left rimel-keymap))                       ; left key mapped
+  (should (assq 'right rimel-keymap))                      ; right key mapped
+  (should (assq 'prior rimel-keymap))                      ; prior mapped
+  (should (assq 'next rimel-keymap))                       ; next mapped
+  (should (assq ?\C-p rimel-keymap))                       ; C-p mapped
+  (should (assq ?\C-n rimel-keymap)))                      ; C-n mapped
+
+;; -----------------------------------------------------------------------
+;; Test: posframe bottom detection
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-at-screen-bottom ()
+  "Test screen bottom detection."
+  (with-temp-buffer
+    ;; At top of buffer — should not be at bottom
+    (insert "line1")
+    (goto-char (point-min))
+    (should-not (rimel--at-screen-bottom-p))))             ; top is not bottom
+
+;; -----------------------------------------------------------------------
+;; Test: show-candidates dispatching
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-show-candidates-echo-area ()
+  "Test echo-area candidate display."
+  (rimel-test--reset-rime)
+  (let ((rimel-show-candidate 'echo-area)
+        (displayed nil))
+    (cl-letf (((symbol-function 'rimel--echo-area-show)
+               (lambda (ctx) (setq displayed ctx))))
+      (let ((ctx '((menu . ((candidates . ("你")))))))
+        (rimel--show-candidates ctx)
+        (should displayed)))))                             ; echo-area-show called
+
+(ert-deftest rimel-test-hide-candidates-echo-area ()
+  "Test echo-area candidate hiding."
+  (let ((rimel-show-candidate 'echo-area))
+    ;; Should not error
+    (rimel--hide-candidates)))                             ; hide succeeds
+
+;; -----------------------------------------------------------------------
+;; Test: faces exist
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-faces-defined ()
+  "Test that all custom faces are defined."
+  (should (facep 'rimel-preedit-face))                     ; preedit face
+  (should (facep 'rimel-highlight-face))                   ; highlight face
+  (should (facep 'rimel-posframe-face))                    ; posframe face
+  (should (facep 'rimel-posframe-border-face)))            ; posframe border face
+
+;; -----------------------------------------------------------------------
+;; Test: aliases
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-command-aliases ()
+  "Test that command aliases are defined."
+  (should (commandp 'rimel-select-schema))                 ; select-schema
+  (should (commandp 'rimel-deploy))                        ; deploy
+  (should (commandp 'rimel-sync)))                         ; sync
+
+;; -----------------------------------------------------------------------
+;; Test: composition loop with mock events
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-composition-loop-cancel ()
+  "Test that escape cancels composition."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你" "妮"))
+  (with-temp-buffer
+    (let ((event-count 0))
+      (cl-letf (((symbol-function 'read-event)
+                 (lambda ()
+                   (cl-incf event-count)
+                   (if (= event-count 1) 'escape ?x))))
+        (let ((result (rimel--composition-loop)))
+          (should-not result)                              ; cancel returns nil
+          (should (string-equal rimel-test--rime-input ""))))))) ; input cleared
+
+(ert-deftest rimel-test-composition-loop-commit-raw ()
+  "Test that return commits raw input."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "nihao"
+        rimel-test--rime-preedit "ni hao"
+        rimel-test--rime-candidates '("你好"))
+  (with-temp-buffer
+    (let ((rimel-return-behavior 'raw))
+      (cl-letf (((symbol-function 'read-event)
+                 (lambda () 'return)))
+        (let ((result (rimel--composition-loop)))
+          (should (equal '(?n ?i ?h ?a ?o) result)))))))   ; raw input returned
+
+(ert-deftest rimel-test-composition-loop-select-candidate ()
+  "Test candidate selection by label key in composition loop."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你" "妮" "尼"))
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () ?2)))                            ; select 2nd candidate
+      (let ((result (rimel--composition-loop)))
+        (should (equal '(?妮) result))))))                  ; 2nd candidate selected
+
+(ert-deftest rimel-test-composition-loop-confirm ()
+  "Test space confirms first candidate."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你" "妮"))
+  ;; Simulate: space key triggers rime commit
+  (setq rimel-test--process-key-hook
+        (lambda (key _mask)
+          (when (= key ?\s)
+            (setq rimel-test--rime-committed "你")
+            (liberime-clear-composition))))
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () ?\s)))
+      (let ((result (rimel--composition-loop)))
+        (should (equal '(?你) result))))))                  ; first candidate committed
+
+(ert-deftest rimel-test-composition-loop-backspace-empty ()
+  "Test that backspace on empty input exits composition."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input ""
+        rimel-test--rime-preedit ""
+        rimel-test--rime-candidates nil)
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () 'backspace)))
+      (let ((result (rimel--composition-loop)))
+        (should-not result)))))                            ; empty backspace exits
+
+(ert-deftest rimel-test-composition-loop-unhandled-key ()
+  "Test that unhandled keys exit and push back event."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你"))
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () ?\C-a)))                         ; unhandled key
+      (let ((unread-command-events nil))
+        (rimel--composition-loop)
+        (should (memq ?\C-a unread-command-events))))))    ; key pushed back
+
+;; -----------------------------------------------------------------------
+;; Test: update-display
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-update-display-inline-candidate ()
+  "Test that update-display shows commit-text-preview for inline candidate mode."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-preedit "ni hao"
+        rimel-test--rime-commit-preview "你好"
+        rimel-test--rime-candidates '("你好"))
+  (with-temp-buffer
+    (insert "test ")
+    (let ((rimel-inline-preedit 'candidate)
+          (rimel-show-candidate nil))
+      (rimel--update-display)
+      (should (overlayp rimel--preedit-overlay))           ; overlay created
+      (let ((as (overlay-get rimel--preedit-overlay 'after-string)))
+        (should (equal "你好" (substring-no-properties as))))) ; shows preview
+    (rimel--clear-preedit)))
+
+(ert-deftest rimel-test-update-display-inline-preedit ()
+  "Test that update-display shows preedit for inline preedit mode."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-preedit "ni hao"
+        rimel-test--rime-candidates '("你好"))
+  (with-temp-buffer
+    (insert "test ")
+    (let ((rimel-inline-preedit t)
+          (rimel-show-candidate nil))
+      (rimel--update-display)
+      (should (overlayp rimel--preedit-overlay))           ; overlay created
+      (let ((as (overlay-get rimel--preedit-overlay 'after-string)))
+        (should (equal "ni hao" (substring-no-properties as))))) ; shows preedit
+    (rimel--clear-preedit)))
+
+(ert-deftest rimel-test-update-display-no-inline ()
+  "Test that update-display skips overlay when inline disabled."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你"))
+  (with-temp-buffer
+    (insert "test ")
+    (let ((rimel-inline-preedit nil)
+          (rimel-show-candidate nil))
+      (rimel--update-display)
+      (should-not rimel--preedit-overlay))))               ; no overlay
+
+(provide 'rimel-test)
+
+;;; rimel-test.el ends here

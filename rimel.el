@@ -3,7 +3,7 @@
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "26.1") (liberime "0.0.6"))
+;; Package-Requires: ((emacs "29.4") (liberime "0.0.6"))
 ;; Keywords: convenience, Chinese, input-method, rime
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -126,7 +126,7 @@ set to \='candidate to inline candidate"
     (end    . "<end>")
     (begin  . "<home>")
     (tab . "<tab>"))
-  "Alist of (emacs-key . rime-keycode) mappings for candidate navigation.
+  "Alist of (emacs-key . rime-keycode) for candidate navigation.
 
 Common Emacs keys: `right', `left', `next', `prior' etc.
 
@@ -140,14 +140,12 @@ Value format supports:
   \"<left>\"  - symbol key (angle brackets)
   (\"C-a\" \"M-b\") - list of keycodes to try sequentially
 
-Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper)
-Key can be: hex (0xFF52), char (a), or symbol (<left>)
+Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper).
+Key can be: hex (0xFF52), char (a), or symbol (<left>).
 
+The rime-keycode can be a single string, or a list to try sequentially.
 Common rime keycodes (hex):
-See the hex keycode in
-https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
-
-The rime-keycode can be a single string, or a list of strings to try sequentially."
+https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173"
   :type '(repeat (cons (sexp :tag "Emacs key")
                        (choice (string :tag "Rime key")
                                (repeat :tag "Rime keys"
@@ -292,7 +290,7 @@ _NAME is the input method name (unused)."
 (defun rimel--show-preedit (preedit)
   "Display PREEDIT string as overlay at point."
   (rimel--clear-preedit)
-  (when (and preedit (not (string-empty-p preedit)))
+  (when (and preedit (not (string-equal preedit "")))
     (let* ((pos (if (> (point) (point-min)) (1- (point)) (point)))
            (surrounding-face (plist-get (text-properties-at pos) 'face))
            ;; When there is text after point, after-string inherits
@@ -544,7 +542,7 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
   (let ((commit (liberime-get-commit)))
-    (when (and commit (not (string-empty-p commit)))
+    (when (and commit (not (string-equal commit "")))
       commit)))
 
 (defun rimel--commit-raw ()
@@ -658,7 +656,7 @@ Return list of characters to insert, or nil."
                ((rimel--event-in-p event rimel-backspace-keys)
                 (rimel--feed-key 65288)
                 (let ((input (liberime-get-input)))
-                  (if (or (null input) (string-empty-p input))
+                  (if (or (null input) (string-equal input ""))
                       (setq continue nil)
                     (rimel--update-display))))
 
@@ -688,7 +686,7 @@ Return list of characters to insert, or nil."
       (rimel--clear-preedit)
       (rimel--hide-candidates))
     ;; Return result
-    (when (and result (not (string-empty-p result)))
+    (when (and result (not (string-equal result "")))
       (string-to-list result))))
 
 ;;; Predicates — context-based auto English switching

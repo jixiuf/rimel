@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main,dev]
+  pull_request:
+
+jobs:
+  byte-compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version:
+          - '29.4'
+          - '30.1'
+          - 'snapshot'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+
+      - name: Install liberime stub
+        run: |
+          mkdir -p ~/.emacs.d/elpa/liberime-0.0.6
+          cat > ~/.emacs.d/elpa/liberime-0.0.6/liberime.el << 'STUB'
+          ;;; liberime.el --- Stub for CI -*- lexical-binding: t; -*-
+          ;; Version: 0.0.6
+          ;; Package-Requires: ((emacs "26.1"))
+          ;;; Code:
+          (defun liberime-get-commit () nil)
+          (defun liberime-get-context () nil)
+          (defun liberime-process-key (_key) nil)
+          (defun liberime-clear-composition () nil)
+          (defun liberime-search (_str _limit) nil)
+          (defun liberime-select-schema (_schema) nil)
+          (defun liberime-get-schema-list () nil)
+          (defun liberime-select-schema-interactive () nil)
+          (defun liberime-try-select-schema (_s) nil)
+          (defun liberime-deploy () nil)
+          (defun liberime-workable-p () nil)
+          (defun liberime-load () nil)
+          (defun liberime-sync () nil)
+          (provide 'liberime)
+          ;;; liberime.el ends here
+          STUB
+
+      - name: Byte-compile
+        run: |
+          emacs --batch -Q \
+            -L . \
+            -L ~/.emacs.d/elpa/liberime-0.0.6 \
+            --eval "(setq byte-compile-error-on-warn t)" \
+            -f batch-byte-compile \
+            rimel.el
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version:
+          - '29.4'
+          - '30.1'
+          - 'snapshot'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs_version }}
+
+      - name: Run tests
+        run: |
+          emacs --batch -Q -L . -L test \
+            -l ert \
+            -l test/rimel-test.el \
+            -f rimel-test-run

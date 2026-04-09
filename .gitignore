@@ -2,3 +2,6 @@ rimel-pkg.el
 rimel-autoloads.el
 *.elc
 .gitignore
+src/*.o
+src/*.so
+*.so
