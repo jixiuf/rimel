@@ -650,7 +650,8 @@ Return list of characters to insert, or nil."
                             (rime-keycode (cdr pair)))
                   (rimel--feed-key-string rime-keycode)
                   (when-let* ((commit (rimel--check-commit)))
-                    (setq result commit continue nil))))
+                    (setq result commit continue nil))
+                  t))
 
                ;; Unhandled key - exit composition, push key back
                (t
