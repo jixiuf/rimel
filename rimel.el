@@ -389,6 +389,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
         (posframe-show
          rimel--posframe-buffer
          :string content
+         :x-pixel-offset 2
          :position (point)
          :background-color (face-background 'rimel-posframe-face nil t)
          :foreground-color (face-foreground 'rimel-posframe-face nil t)
