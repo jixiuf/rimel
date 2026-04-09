@@ -1,0 +1,4 @@
+rimel-pkg.el
+rimel-autoloads.el
+*.elc
+.gitignore
