@@ -379,6 +379,11 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
         (message "%s" content)))))
 
 ;; Posframe backend
+(defun rimel--at-screen-bottom-p ()
+  "At screen bottom or not."
+  (let* ((current-line (count-screen-lines (window-start) (point)))
+         (window-height (window-body-height)))
+    (>= current-line (- window-height 1))))
 
 (defun rimel--posframe-show (context)
   "Display candidates from CONTEXT in a posframe near cursor."
@@ -393,6 +398,8 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          rimel--posframe-buffer
          :string content
          :x-pixel-offset 2
+         ;; for TUI emacs
+         :y-pixel-offset (if (rimel--at-screen-bottom-p) -3 1)
          :position (point)
          :background-color (face-background 'rimel-posframe-face nil t)
          :foreground-color (face-foreground 'rimel-posframe-face nil t)
