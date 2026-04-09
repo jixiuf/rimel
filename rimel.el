@@ -262,6 +262,7 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
 
 ;;; Activation / Deactivation
 
+;;;###autoload
 (defun rimel-activate (_name)
   "Activate rimel input method.
 Called by Emacs when user selects the \"rimel\" input method.
@@ -723,6 +724,16 @@ to detecting $ and \\ prefixes."
         (and (> (point) (point-min))
              (let ((ch (char-before)))
                (or (eq ch ?$) (eq ch ?\\)))))))
+
+
+;;;###autoload (autoload 'rimel-select-schema "rimel" "Select a rime schema interactive." t)
+(defalias 'rimel-select-schema #'liberime-select-schema-interactive)
+
+;;;###autoload (autoload 'rimel-deploy "rimel" "Deploy liberime to affect config file change." t)
+(defalias 'rimel-deploy #'liberime-deploy)
+
+;;;###autoload (autoload 'rimel-sync "rimel" "Sync rime user data." t)
+(defalias 'rimel-sync #'liberime-sync)
 
 ;;; Registration
 
