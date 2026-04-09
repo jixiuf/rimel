@@ -436,14 +436,15 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
     (let ((case-fold-search nil)
           (modifiers 0)
           (key keycode))
-      (when (string-match "^\\([CMsSH]\\)-" keycode)
-        (pcase (substring keycode (match-beginning 1) (match-end 1))
-          ("C" (setq modifiers (logior modifiers 4)))
-          ("M" (setq modifiers (logior modifiers 8)))
-          ("s" (setq modifiers (logior modifiers (ash 1 26)))) ; Super
-          ("S" (setq modifiers (logior modifiers 1)))
-          ("H" (setq modifiers (logior modifiers (ash 1 27))))) ; Hyper
-        (setq key (substring keycode (match-end 0))))
+      (while (string-match "^\\([CMsSH]+\\)-" key)
+        (dolist (mod (string-to-list (match-string 1 key)))
+          (pcase mod
+            (?C (setq modifiers (logior modifiers 4)))
+            (?M (setq modifiers (logior modifiers 8)))
+            (?s (setq modifiers (logior modifiers (ash 1 26))))
+            (?S (setq modifiers (logior modifiers 1)))
+            (?H (setq modifiers (logior modifiers (ash 1 27))))))
+        (setq key (substring key (match-end 0))))
       (let ((keyval
              (cond
               ((numberp key) key)       ;#xff52, ?a
