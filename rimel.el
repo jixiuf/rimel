@@ -358,7 +358,8 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 
 (defun rimel--echo-area-show (context)
   "Display candidates from CONTEXT in the echo area."
-  (let ((content (rimel--format-candidates context " " t)))
+  (let ((content (rimel--format-candidates
+                  context " " (eq rimel-inline-preedit 'candidate))))
     (when content
       (let ((message-log-max nil))
         (message "%s" content)))))
@@ -370,7 +371,8 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
   (if (not (require 'posframe nil t))
       (rimel--echo-area-show context)
     (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
-           (content (rimel--format-candidates context sep nil)))
+           (content (rimel--format-candidates
+                     context sep (eq rimel-inline-preedit 'candidate))))
       (if (not content)
           (rimel--posframe-hide)
         (posframe-show
