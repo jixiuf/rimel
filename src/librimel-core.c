@@ -7,21 +7,21 @@
 #include <unistd.h>
 
 #include "interface.h"
-#include "liberime-core.h"
+#include "librimel-core.h"
 
 /**
  * Macro that defines a docstring for a function.
- * @param name The function name (without liberime_ prefix).
+ * @param name The function name (without librimel_ prefix).
  * @param args The argument list as visible from Emacs (without parens).
  * @param docstring The rest of the documentation.
  */
 #define DOCSTRING(name, args, docstring)                                       \
-  const char *liberime_##name##__doc = (docstring "\n\n(fn " args ")")
+  const char *librimel_##name##__doc = (docstring "\n\n(fn " args ")")
 
 #define DEFUN(ename, cname, min_nargs, max_nargs)                              \
   em_defun(env, (ename),                                                       \
            env->make_function(env, (min_nargs), (max_nargs), cname,            \
-                              liberime_##cname##__doc, rime))
+                              librimel_##cname##__doc, rime))
 
 #define CONS_INT(key, integer)                                                 \
   em_cons(env, env->intern(env, key), env->make_integer(env, integer));
@@ -36,7 +36,7 @@
 #define INPUT_MAXSTRLEN 1024
 
 #define NO_SESSION_ERR                                                         \
-  "Cannot connect to librime session, make sure to run liberime-start first."
+  "Cannot connect to librime session, make sure to run librimel-start first."
 
 typedef struct _EmacsRime {
   RimeSessionId session_id;
@@ -59,7 +59,7 @@ void notification_handler(void *context, RimeSessionId session_id,
                           const char *message_type, const char *message_value) {
   /* EmacsRime *rime = (EmacsRime*) context; */
   /* emacs_env *env = rime->EmacsEnv; */
-  /* char format[] = "[liberime] %s: %s"; */
+  /* char format[] = "[librimel] %s: %s"; */
   /* emacs_value args[3]; */
   /* args[0] = env->make_string(env, format, strnlen(format, SCHEMA_MAXSTRLEN));
    */
@@ -132,10 +132,10 @@ static emacs_value start(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   RIME_STRUCT(RimeTraits, emacs_rime_traits);
 
   emacs_rime_traits.shared_data_dir = shared_data_dir;
-  emacs_rime_traits.app_name = "rime.emacs-liberime";
+  emacs_rime_traits.app_name = "rime.emacs-librimel";
   emacs_rime_traits.user_data_dir = user_data_dir;
   emacs_rime_traits.distribution_name = "Rime";
-  emacs_rime_traits.distribution_code_name = "emacs-liberime";
+  emacs_rime_traits.distribution_code_name = "emacs-librimel";
   emacs_rime_traits.distribution_version = "0.1.0";
   if (rime->first_run) {
     rime->api->setup(&emacs_rime_traits);
@@ -306,7 +306,7 @@ static emacs_value get_schema_list(emacs_env *env, ptrdiff_t nargs,
 DOCSTRING(
     select_schema, "SCHEMA_ID",
     "Select a rime schema.\n"
-    "SCHENA_ID should be a value returned from `liberime-get-schema-list'.");
+    "SCHENA_ID should be a value returned from `librimel-get-schema-list'.");
 static emacs_value select_schema(emacs_env *env, ptrdiff_t nargs,
                                  emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
@@ -846,7 +846,7 @@ static emacs_value set_schema_config(emacs_env *env, ptrdiff_t nargs,
   return em_t;
 }
 
-void liberime_init(emacs_env *env) {
+void librimel_init(emacs_env *env) {
   // Name 'rime' is hardcode in DEFUN micro, so if you edit here,
   // you should edit DEFUN micro too.
   EmacsRime *rime = (EmacsRime *)malloc(sizeof(EmacsRime));
@@ -860,36 +860,36 @@ void liberime_init(emacs_env *env) {
     return;
   }
 
-  DEFUN("liberime-start", start, 2, 2);
-  DEFUN("liberime-search", search, 1, 2);
-  DEFUN("liberime-select-schema", select_schema, 1, 1);
-  DEFUN("liberime-get-schema-list", get_schema_list, 0, 0);
+  DEFUN("librimel-start", start, 2, 2);
+  DEFUN("librimel-search", search, 1, 2);
+  DEFUN("librimel-select-schema", select_schema, 1, 1);
+  DEFUN("librimel-get-schema-list", get_schema_list, 0, 0);
 
   // input
-  DEFUN("liberime-process-key", process_key, 1, 2);
-  DEFUN("liberime-commit-composition", commit_composition, 0, 0);
-  DEFUN("liberime-clear-composition", clear_composition, 0, 0);
-  DEFUN("liberime-select-candidate", select_candidate, 1, 1);
-  DEFUN("liberime-get-input", get_input, 0, 0);
+  DEFUN("librimel-process-key", process_key, 1, 2);
+  DEFUN("librimel-commit-composition", commit_composition, 0, 0);
+  DEFUN("librimel-clear-composition", clear_composition, 0, 0);
+  DEFUN("librimel-select-candidate", select_candidate, 1, 1);
+  DEFUN("librimel-get-input", get_input, 0, 0);
 
   // output
-  DEFUN("liberime-get-commit", get_commit, 0, 0);
-  DEFUN("liberime-get-context", get_context, 0, 0);
+  DEFUN("librimel-get-commit", get_commit, 0, 0);
+  DEFUN("librimel-get-context", get_context, 0, 0);
 
   // status
-  DEFUN("liberime-get-status", get_status, 0, 0);
+  DEFUN("librimel-get-status", get_status, 0, 0);
 
   // sync
-  DEFUN("liberime-get-sync-dir", get_sync_dir, 0, 0);
-  DEFUN("liberime-sync-user-data", sync_user_data, 0, 0);
-  DEFUN("liberime-finalize", finalize, 0, 0);
+  DEFUN("librimel-get-sync-dir", get_sync_dir, 0, 0);
+  DEFUN("librimel-sync-user-data", sync_user_data, 0, 0);
+  DEFUN("librimel-finalize", finalize, 0, 0);
 
   // user config
-  DEFUN("liberime-get-user-config", get_user_config, 2, 3);
-  DEFUN("liberime-set-user-config", set_user_config, 3, 4);
+  DEFUN("librimel-get-user-config", get_user_config, 2, 3);
+  DEFUN("librimel-set-user-config", set_user_config, 3, 4);
 
   // schema config
   // if schema id is nil/empty then get/set current schema config
-  DEFUN("liberime-get-schema-config", get_schema_config, 2, 3);
-  DEFUN("liberime-set-schema-config", set_schema_config, 3, 4);
+  DEFUN("librimel-get-schema-config", get_schema_config, 2, 3);
+  DEFUN("librimel-set-schema-config", set_schema_config, 3, 4);
 }

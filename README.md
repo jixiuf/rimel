@@ -1,12 +1,10 @@
-# Rimel — 基于 liberime 的轻量级 Emacs Rime 输入法
+# Rimel — 轻量级 Emacs Rime 输入法
 
-Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](https://github.com/merrickluo/liberime) 动态模块，
+Rimel 是一个轻量级的 Emacs 中文输入法
 使用 Emacs 内置的 `input-method-function` 接口和 `read-event` 循环（与 quail 相同的模式）。
 
 ## 特性
 
-- 📦 **单文件**：仅 `rimel.el` 一个文件，约 700 行
-- 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
 - 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
 - ✏️ **光标处编码 overlay**：输入时在光标处显示 preedit
@@ -21,19 +19,18 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ### 前置条件
 
 1. 安装 [librime](https://github.com/rime/librime)
-2. melpa上安装 [liberime](https://github.com/merrickluo/liberime) 并确保可用
 
 ### 配置
 
 ```elisp
 (add-to-list 'load-path "/path/to/rimel")
-(add-to-list 'load-path "/path/to/liberime")
+(add-to-list 'load-path "/path/to/librimel")
 
 ;; 如果自定义了用户数据，可通过此配置定制
-;;(setq liberime-user-data-dir "") ;
+;;(setq librimel-user-data-dir "") ;
 
-;; 自动编译liberime 模块 详见 https://github.com/merrickluo/liberime
-;;(setq liberime-auto-build t)
+;; 自动编译librimel 模块 详见 https://github.com/jixiuf/rimel
+;;(setq librimel-auto-build t)
 
 (require 'rimel)
 (setq default-input-method "rimel")
@@ -139,11 +136,11 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 
 ### 架构对比
 
-| | **Rimel** | **emacs-rime** | **pyim + pyim-liberime** |
+| | **Rimel** | **emacs-rime** | **pyim + pyim-librimel** |
 |---|---|---|---|
-| **依赖** | liberime | 自带 C 模块 (lib.c) | pyim 框架 + liberime |
+| **依赖** | librimel | 自带 C 模块 (lib.c) | pyim 框架 + librimel |
 | **代码量** | ~700 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
-| **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
+| **C 模块** | 无（复用 librimel） | 自带 lib.c | 无（复用 librimel） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
 | **候选展示** | nil/echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
 | **按键处理** | `read-event` 循环（类似 quail） | `overriding-terminal-local-map` | 独立事件系统 |
@@ -158,18 +155,18 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 - 适合想要**最简单可用**的 rime 输入法的用户
 
 **emacs-rime** — *功能完备*
-- 自带 C 动态模块（lib.c），独立于 liberime
+- 自带 C 动态模块（lib.c），独立于 librimel
 - 支持 5 种候选展示方式（minibuffer/message/popup/posframe/sidewindow）
 - 支持 predicates 系统（自动根据上下文切换中英文）
 - 支持 inline ASCII 模式
 - 使用 minor mode + `overriding-terminal-local-map` 处理合成期间按键
 - 适合需要**深度定制和高级功能**的用户
 
-**pyim + pyim-liberime** — *框架化*
-- pyim 是完整的输入法框架，liberime 只是其中一个后端
+**pyim + pyim-librimel** — *框架化*
+- pyim 是完整的输入法框架，librimel 只是其中一个后端
 - 支持多种输入方案（全拼、双拼、五笔等），rime 只是其一
 - 有独立的词频管理、词库、云输入等功能
-- pyim-liberime 仅 326 行，本质是 `liberime-search()` 的薄包装
+- pyim-librimel 仅 326 行，本质是 `librimel-search()` 的薄包装
 - 适合需要**多输入法统一管理**的用户
 
 ### 功能对比
@@ -193,6 +190,74 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 - **想要最简单、最轻量的 rime 体验（含 predicates）** → Rimel
 - **需要 inline ASCII、多种候选 UI（5 种）** → emacs-rime
 - **需要多输入法后端（五笔+拼音+rime）统一管理** → pyim
+
+## librimel 开发
+
+librimel 是 Emacs 动态模块，提供了 librime 库绑定。
+
+### 依赖
+
+1. Emacs 需要启用动态模块支持（编译时使用 `--with-modules`）
+2. librime 版本 > 1.3.2
+
+### Linux 编译
+
+```bash
+export EMACS_MAJOR_VERSION=26  # 按实际情况更改
+make
+```
+
+### Mac 编译
+
+1. 安装 Xcode，参考：[[https://github.com/rime/librime/blob/master/README-mac.md]]
+2. 设置环境变量 `RIME_PATH`：
+   ```bash
+   export RIME_PATH=~/Develop/others/librime
+   ```
+3. 编译：
+   ```bash
+   export EMACS_MAJOR_VERSION=26
+   make
+   ```
+
+### Windows (msys2) 编译
+
+```bash
+pacman -Sy --overwrite "*" --needed base-devel zip \
+       ${MINGW_PACKAGE_PREFIX}-gcc                 \
+       ${MINGW_PACKAGE_PREFIX}-librime             \
+       ${MINGW_PACKAGE_PREFIX}-librime-data        \
+       ${MINGW_PACKAGE_PREFIX}-rime-wubi           \
+       ${PACKAGE_PREFIX}-rime-emoji                \
+       ${MINGW_PACKAGE_PREFIX}-rime-double-pinyin
+
+# 链接 opencc 文件
+ln -s ${MINGW_PREFIX}/share/opencc/* ${MINGW_PREFIX}/share/rime-data/opencc
+
+export EMACS_MAJOR_VERSION=26
+make
+```
+
+### 加载时自动编译
+
+```elisp
+(let ((librimel-auto-build t))
+  (require 'librimel nil t))
+```
+
+### 部署 Rime
+
+手动修改 librime 配置后，调用 `(librimel-deploy)` 重新部署。
+
+### 同步 Rime 词库
+
+1. 在 `$HOME/.emacs.d/rime/installation.yaml` 中设置 `sync_dir`
+2. 添加到 `after-init-hook`：
+   ```elisp
+   (add-hook 'after-init-hook #'librimel-sync)
+   ```
+
+参考：[[https://github.com/rime/home/wiki/UserGuide#%E5%90%8C%E6%AD%A5%E7%94%A8%E6%88%B6%E8%B3%87%E6%96%99][Rime 同步用户资料]]
 
 ## License
 

@@ -11,7 +11,7 @@
 (require 'cl-lib)
 
 ;; -----------------------------------------------------------------------
-;; Mock liberime — stub out the C dynamic module for pure Elisp testing
+;; Mock librimel — stub out the C dynamic module for pure Elisp testing
 ;; -----------------------------------------------------------------------
 
 (defvar rimel-test--rime-input ""
@@ -58,9 +58,9 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-schema nil
         rimel-test--process-key-hook nil))
 
-;; Provide the liberime feature so (require 'liberime) succeeds
-(unless (featurep 'liberime)
-  (defun liberime-process-key (key &optional mask)
+;; Provide the librimel feature so (require 'librimel) succeeds
+(unless (featurep 'librimel)
+  (defun librimel-process-key (key &optional mask)
     "Mock: append KEY to input buffer, run hook."
     (when (and (integerp key) (>= key ?a) (<= key ?z))
       (setq rimel-test--rime-input
@@ -69,7 +69,7 @@ Can be set in tests to simulate rime behavior.")
       (funcall rimel-test--process-key-hook key (or mask 0)))
     t)
 
-  (defun liberime-get-context ()
+  (defun librimel-get-context ()
     "Mock: return a simulated context alist."
     (when (or rimel-test--rime-candidates
               rimel-test--rime-preedit)
@@ -80,58 +80,58 @@ Can be set in tests to simulate rime behavior.")
                  (page-no . ,rimel-test--rime-page)
                  (last-page-p . ,rimel-test--rime-last-page))))))
 
-  (defun liberime-get-commit ()
+  (defun librimel-get-commit ()
     "Mock: return and clear committed text."
     (prog1 rimel-test--rime-committed
       (setq rimel-test--rime-committed nil)))
 
-  (defun liberime-get-input ()
+  (defun librimel-get-input ()
     "Mock: return the current input buffer."
     rimel-test--rime-input)
 
-  (defun liberime-clear-composition ()
+  (defun librimel-clear-composition ()
     "Mock: clear input buffer."
     (setq rimel-test--rime-input ""
           rimel-test--rime-preedit nil
           rimel-test--rime-commit-preview nil
           rimel-test--rime-candidates nil))
 
-  (defun liberime-select-candidate (idx)
+  (defun librimel-select-candidate (idx)
     "Mock: select candidate at IDX."
     (when (and rimel-test--rime-candidates
                (< idx (length rimel-test--rime-candidates)))
       (setq rimel-test--rime-committed
             (nth idx rimel-test--rime-candidates))
-      (liberime-clear-composition)))
+      (librimel-clear-composition)))
 
-  (defun liberime-workable-p ()
+  (defun librimel-workable-p ()
     "Mock: always workable."
     t)
 
-  (defun liberime-load ()
+  (defun librimel-load ()
     "Mock: no-op."
     nil)
 
-  (defun liberime-try-select-schema (schema)
+  (defun librimel-try-select-schema (schema)
     "Mock: record selected schema."
     (setq rimel-test--rime-schema schema))
 
-  (defun liberime-select-schema-interactive ()
+  (defun librimel-select-schema-interactive ()
     "Mock: no-op."
     (interactive)
     nil)
 
-  (defun liberime-deploy ()
+  (defun librimel-deploy ()
     "Mock: no-op."
     (interactive)
     nil)
 
-  (defun liberime-sync ()
+  (defun librimel-sync ()
     "Mock: no-op."
     (interactive)
     nil)
 
-  (provide 'liberime))
+  (provide 'librimel))
 
 (require 'rimel)
 
@@ -772,7 +772,7 @@ Can be set in tests to simulate rime behavior.")
         (lambda (key _mask)
           (when (= key ?\s)
             (setq rimel-test--rime-committed "你")
-            (liberime-clear-composition))))
+            (librimel-clear-composition))))
   (with-temp-buffer
     (cl-letf (((symbol-function 'read-event)
                (lambda () ?\s)))

@@ -3,9 +3,9 @@
 
 #include "emacs-module.h"
 
-#ifndef LIBERIME_H
-#define LIBERIME_H
+#ifndef LIBRIMEL_H
+#define LIBRIMEL_H
 
-void liberime_init(emacs_env *env);
+void librimel_init(emacs_env *env);
 
 #endif

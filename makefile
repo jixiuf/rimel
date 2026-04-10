@@ -1,9 +1,76 @@
 # -*- coding:utf-8 -*-
-.PHONY: test build clean
 
-test:
+PREFIX ?= $(CURDIR)
+UNAME_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
+EMACS   := $(shell sh -c 'which emacs')
+
+SUFFIX = .so
+LIBRIME = -lrime
+
+## MINGW
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+	SUFFIX = .dll
+	LIBRIME = -llibrime
+endif
+
+ifdef MODULE_FILE_SUFFIX
+	SUFFIX = $(MODULE_FILE_SUFFIX)
+endif
+
+VERSION = 1.00
+CC = gcc
+LDFLAGS += -shared
+SRC = src
+SOURCES = $(wildcard $(SRC)/*.c)
+OBJS = $(patsubst %.c, %.o, $(SOURCES))
+TARGET = $(SRC)/librimel-core$(SUFFIX)
+CFLAGS += -fPIC -O2 -Wall
+
+ifndef EMACS_MAJOR_VERSION
+	EMACS_MAJOR_VERSION = 26
+endif
+
+ifndef EMACS
+	CFLAGS += -I emacs-module/$(EMACS_MAJOR_VERSION)
+endif
+ifdef EMACS_PLUS_PATH
+       CFLAGS += -I ${EMACS_PLUS_PATH}
+endif
+
+ifdef RIME_PATH
+	CFLAGS += -I ${RIME_PATH}/src/
+	LDFLAGS += -L ${RIME_PATH}/build/lib/ -L ${RIME_PATH}/build/lib/Release/
+	LDFLAGS += -Wl,-rpath,${RIME_PATH}/build/lib/
+	LDFLAGS += -Wl,-rpath,${RIME_PATH}/build/lib/Release
+	LDFLAGS += $(LIBRIME)
+else
+	LDFLAGS += $(LIBRIME)
+endif
+
+
+.PHONY:everything objs clean
+
+all:$(TARGET)
+
+objs:$(OBJS)
+
+clean:
+	rm -rf $(OBJS) $(TARGET) build
+
+$(TARGET):$(OBJS)
+	rm -rf build
+	$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
+
+.PHONY: test
+test:$(TARGET)
 	emacs --batch -Q -L . -L test \
 	  -l ert \
 	  -l test/rimel-test.el \
 	  -f rimel-test-run
+
+librimel-build:
+	make -f Makefile-librimel-build
+install: ${TARGET}
+	install -p -m 755 ${TARGET} $(PREFIX)/lib
+
 

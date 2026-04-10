@@ -53,8 +53,8 @@ function install_all_dll() {
     IFS=$OLD_IFS
 }
 
-# 编译 liberime
-function build_liberime() {
+# 编译 librimel
+function build_librimel() {
 
     echo ""
     echo "########## Install build dependences ##########"
@@ -68,41 +68,41 @@ function build_liberime() {
         ${PACKAGE_PREFIX}-rime-emoji
     )
 
-    ## 不安装 liberime, 因为可能和自己编译的 liberime 产生版本冲突。
-    if pacman -Qs liberime; then
-        pacman -R --noconfirm ${PACKAGE_PREFIX}-liberime
+    ## 不安装 librimel, 因为可能和自己编译的 librimel 产生版本冲突。
+    if pacman -Qs librimel; then
+        pacman -R --noconfirm ${PACKAGE_PREFIX}-librimel
     fi
 
     pacman -Sy --overwrite "*" --needed --noconfirm ${dep_packages[@]}
 
     echo ""
-    echo "########## Build and install liberime ##########"
+    echo "########## Build and install librimel ##########"
 
     make clean
     make
     
     echo ""
-    echo "Build liberime Finished!!!"
+    echo "Build librimel Finished!!!"
 }
 
-# 打包liberime
-function archive_liberime() {
+# 打包librimel
+function archive_librimel() {
     echo ""
-    echo "########## Archive liberime ##########"
+    echo "########## Archive librimel ##########"
 
     local zip_file
     if [[ -n "${ARCHIVE_NAME}" ]]; then
         zip_file="${PWD}/${ARCHIVE_NAME}.zip"
     else
-        zip_file="${PWD}/liberime-windows-${ARCH}.zip"
+        zip_file="${PWD}/librimel-windows-${ARCH}.zip"
     fi
 
     local temp_dir="temp"
 
     install -Dm644 tools/README-archive.txt ${temp_dir}/README.txt
 
-    install -Dm644 liberime.el -t ${temp_dir}/share/emacs/site-lisp/liberime/
-    install -Dm644 src/liberime-core.dll -t ${temp_dir}/share/emacs/site-lisp/liberime/
+    install -Dm644 librimel.el -t ${temp_dir}/share/emacs/site-lisp/librimel/
+    install -Dm644 src/librimel-core.dll -t ${temp_dir}/share/emacs/site-lisp/librimel/
 
     install -Dm644 ${MINGW_PREFIX}/bin/librime.dll -t ${temp_dir}/bin/
     install_all_dll ${MINGW_PREFIX}/bin/librime.dll    \
@@ -126,14 +126,14 @@ function archive_liberime() {
     cd ..
     rm -rf ${temp_dir}
     
-    echo "Archive liberime to file: ${zip_file}"
+    echo "Archive librimel to file: ${zip_file}"
 }
 
 function display_usage() {
     cat <<HELP
-用法: ./liberime-msys2-build.sh [选项]
+用法: ./librimel-msys2-build.sh [选项]
 
-      使用 msys2 构建 liberime-core.dll
+      使用 msys2 构建 librimel-core.dll
 
 选项:
 
@@ -166,8 +166,8 @@ function main() {
         esac
     done
 
-    build_liberime
-    archive_liberime
+    build_librimel
+    archive_librimel
 
 }
 

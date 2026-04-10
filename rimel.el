@@ -3,7 +3,7 @@
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.4") (liberime "0.0.6"))
+;; Package-Requires: ((emacs "29.4") (librimel "0.0.6"))
 ;; Keywords: convenience, Chinese, input-method, rime
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -13,7 +13,7 @@
 
 ;;; Commentary:
 
-;; Rimel is a lightweight Chinese input method for Emacs based on liberime.
+;; Rimel is a lightweight Chinese input method for Emacs based on librimel.
 ;; It directly uses Emacs' built-in `input-method-function' interface with
 ;; a read-event loop (similar to quail), providing a native Emacs experience.
 ;;
@@ -31,15 +31,15 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'liberime)
+(require 'librimel)
 
 ;; Suppress byte-compiler warnings for C dynamic module functions
-(declare-function liberime-process-key "ext:liberime-core")
-(declare-function liberime-get-context "ext:liberime-core")
-(declare-function liberime-get-commit "ext:liberime-core")
-(declare-function liberime-get-input "ext:liberime-core")
-(declare-function liberime-clear-composition "ext:liberime-core")
-(declare-function liberime-select-candidate "ext:liberime-core")
+(declare-function librimel-process-key "ext:librimel-core")
+(declare-function librimel-get-context "ext:librimel-core")
+(declare-function librimel-get-commit "ext:librimel-core")
+(declare-function librimel-get-input "ext:librimel-core")
+(declare-function librimel-clear-composition "ext:librimel-core")
+(declare-function librimel-select-candidate "ext:librimel-core")
 
 ;;; Customization
 
@@ -272,10 +272,10 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
   "Activate rimel input method.
 Called by Emacs when user selects the \"rimel\" input method.
 _NAME is the input method name (unused)."
-  (unless (liberime-workable-p)
-    (liberime-load))
-  (when (and rimel-schema (liberime-workable-p))
-    (liberime-try-select-schema rimel-schema))
+  (unless (librimel-workable-p)
+    (librimel-load))
+  (when (and rimel-schema (librimel-workable-p))
+    (librimel-try-select-schema rimel-schema))
   (setq-local input-method-function #'rimel-input-method)
   (setq-local deactivate-current-input-method-function #'rimel-deactivate))
 
@@ -415,7 +415,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 
 (defun rimel--clear-state ()
   "Clear all composition state."
-  (ignore-errors (liberime-clear-composition))
+  (ignore-errors (librimel-clear-composition))
   (rimel--clear-preedit)
   (rimel--hide-candidates))
 
@@ -438,11 +438,11 @@ Works for both character (integer) and symbol events."
   (memq event keys))
 
 (defun rimel--feed-key (key &optional mask)
-  "Send KEY to liberime for processing.  Return non-nil if handled.
+  "Send KEY to librimel for processing.  Return non-nil if handled.
 MASK is an optional modifier mask to apply to the key."
   (if mask
-      (liberime-process-key key mask)
-    (liberime-process-key key)))
+      (librimel-process-key key mask)
+    (librimel-process-key key)))
 
 (defun rimel--feed-key-string (keycode)
   "Parse KEYCODE string(s) and feed to rime.
@@ -541,22 +541,22 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
 
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
-  (let ((commit (liberime-get-commit)))
+  (let ((commit (librimel-get-commit)))
     (when (and commit (not (string-equal commit "")))
       commit)))
 
 (defun rimel--commit-raw ()
   "Commit raw English input or preview based on `rimel-return-behavior'."
   (let ((result (pcase rimel-return-behavior
-                  ('raw (liberime-get-input))
-                  ('preview (let* ((ctx (liberime-get-context)))
+                  ('raw (librimel-get-input))
+                  ('preview (let* ((ctx (librimel-get-context)))
                               (alist-get 'commit-text-preview ctx))))))
-    (liberime-clear-composition)
+    (librimel-clear-composition)
     (or result "")))
 
 (defun rimel--select-candidate (idx)
   "Select candidate at IDX (0-based).  Return committed text or nil."
-  (liberime-select-candidate idx)
+  (librimel-select-candidate idx)
   (or (rimel--get-commit)
       (rimel--update-display)))
 
@@ -581,7 +581,7 @@ This function serves as `input-method-function'."
           overriding-local-map)
       (list key)
     ;; Start composition
-    (liberime-clear-composition)
+    (librimel-clear-composition)
     (rimel--feed-key key)
     ;; Check immediate commit (e.g., rime auto-select)
     (let ((commit (rimel--get-commit)))
@@ -592,7 +592,7 @@ This function serves as `input-method-function'."
 
 (defun rimel--update-display ()
   "Update preedit overlay and echo area candidates from current rime state."
-  (let ((ctx (liberime-get-context)))
+  (let ((ctx (librimel-get-context)))
     (cond
      ((eq rimel-inline-preedit 'candidate)
       (rimel--show-preedit (alist-get 'commit-text-preview ctx)))
@@ -606,7 +606,7 @@ This function serves as `input-method-function'."
   (let ((commit (rimel--get-commit)))
     (if commit
         (progn
-          (when-let* ((input (liberime-get-input)))
+          (when-let* ((input (librimel-get-input)))
             (setq unread-command-events
                   (append (string-to-list input) unread-command-events)))
           commit)
@@ -655,14 +655,14 @@ Return list of characters to insert, or nil."
                ;; Backspace - delete last character
                ((rimel--event-in-p event rimel-backspace-keys)
                 (rimel--feed-key 65288)
-                (let ((input (liberime-get-input)))
+                (let ((input (librimel-get-input)))
                   (if (or (null input) (string-equal input ""))
                       (setq continue nil)
                     (rimel--update-display))))
 
                ;; Cancel composition (escape etc.)
                ((rimel--event-in-p event rimel-cancel-keys)
-                (liberime-clear-composition)
+                (librimel-clear-composition)
                 (setq continue nil))
 
                ;; Key mapping via rimel-keymap
@@ -675,7 +675,7 @@ Return list of characters to insert, or nil."
 
                ;; Unhandled key - exit composition, push key back
                (t
-                (liberime-clear-composition)
+                (librimel-clear-composition)
                 (setq continue nil)
                 (setq unread-command-events
                       (if (characterp event)
@@ -777,20 +777,20 @@ to detecting $ and \\ prefixes."
 
 
 ;;;###autoload (autoload 'rimel-select-schema "rimel" "Select a rime schema interactive." t)
-(defalias 'rimel-select-schema #'liberime-select-schema-interactive)
+(defalias 'rimel-select-schema #'librimel-select-schema-interactive)
 
-;;;###autoload (autoload 'rimel-deploy "rimel" "Deploy liberime to affect config file change." t)
-(defalias 'rimel-deploy #'liberime-deploy)
+;;;###autoload (autoload 'rimel-deploy "rimel" "Deploy librimel to affect config file change." t)
+(defalias 'rimel-deploy #'librimel-deploy)
 
 ;;;###autoload (autoload 'rimel-sync "rimel" "Sync rime user data." t)
-(defalias 'rimel-sync #'liberime-sync)
+(defalias 'rimel-sync #'librimel-sync)
 
 ;;; Registration
 
 ;;;###autoload
 (register-input-method "rimel" "Chinese" #'rimel-activate
                        (if (char-displayable-p 12563) (char-to-string 12563) "中")
-                       "Rimel - Rime input method via liberime")
+                       "Rimel - Rime input method via librimel")
 
 (provide 'rimel)
 

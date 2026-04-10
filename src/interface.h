@@ -11,13 +11,13 @@ extern emacs_value em_nil, em_stringp, em_t;
 extern emacs_value em_direct, em_symbolic;
 
 /**
- * Initialize the liberime emacs interface.
+ * Initialize the librimel emacs interface.
  * This function should only be called once.
  */
 void em_init(emacs_env *env);
 
 /**
- * Signal an error originating form liberime.
+ * Signal an error originating form librimel.
  * @param env The active Emacs environment.
  * @param _klass The error code.
  * @param _msg The error message.
