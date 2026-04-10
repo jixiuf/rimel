@@ -104,8 +104,8 @@ function archive_librimel() {
     install -Dm644 librimel.el -t ${temp_dir}/share/emacs/site-lisp/librimel/
     install -Dm644 src/librimel-core.dll -t ${temp_dir}/share/emacs/site-lisp/librimel/
 
-    install -Dm644 ${MINGW_PREFIX}/bin/librime.dll -t ${temp_dir}/bin/
-    install_all_dll ${MINGW_PREFIX}/bin/librime.dll    \
+    install -Dm644 ${MINGW_PREFIX}/bin/librime-1.dll -t ${temp_dir}/bin/
+    install_all_dll ${MINGW_PREFIX}/bin/librime-1.dll    \
                     ${temp_dir}/bin/                   \
                     "mingw32/bin\\|mingw32/lib\\|mingw64/bin\\|mingw64/lib\\|usr/bin\\|usr/lib"
 

@@ -27,12 +27,10 @@ TARGET = $(SRC)/librimel-core$(SUFFIX)
 CFLAGS += -fPIC -O2 -Wall
 
 ifndef EMACS_MAJOR_VERSION
-	EMACS_MAJOR_VERSION = 26
+	EMACS_MAJOR_VERSION := $(shell emacs --batch --eval '(princ emacs-major-version)' 2>/dev/null || echo 26)
 endif
 
-ifndef EMACS
-	CFLAGS += -I emacs-module/$(EMACS_MAJOR_VERSION)
-endif
+CFLAGS += -I emacs-module/$(EMACS_MAJOR_VERSION)
 ifdef EMACS_PLUS_PATH
        CFLAGS += -I ${EMACS_PLUS_PATH}
 endif
