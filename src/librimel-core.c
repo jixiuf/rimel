@@ -38,10 +38,17 @@
 #define NO_SESSION_ERR                                                         \
   "Cannot connect to librime session, make sure to run librimel-start first."
 
+#define CHECK_INITIALIZED()                                                    \
+  if (!rime->initialized) {                                                    \
+    em_signal_rimeerr(env, 1, "librimel-start must be called first.");         \
+    return em_nil;                                                             \
+  }
+
 typedef struct _EmacsRime {
   RimeSessionId session_id;
   RimeApi *api;
   bool first_run;
+  bool initialized;
 } EmacsRime;
 
 typedef struct _CandidateLinkedList {
@@ -165,6 +172,7 @@ static emacs_value librimel_start(emacs_env *env, ptrdiff_t nargs,
     rime->session_id = 0;
   }
   rime->session_id = rime->api->create_session();
+  rime->initialized = true;
 
   // Free allocated strings
   free(shared_data_dir);
@@ -178,11 +186,13 @@ DOCSTRING(librimel_finalize, "", "Finalize librime for redeploy.");
 static emacs_value librimel_finalize(emacs_env *env, ptrdiff_t nargs,
                                      emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
   if (rime->session_id) {
     rime->api->destroy_session(rime->session_id);
     rime->session_id = 0;
   }
   rime->api->finalize();
+  rime->initialized = false;
   return em_t;
 }
 
@@ -191,6 +201,7 @@ DOCSTRING(librimel_create_session, "",
 static emacs_value librimel_create_session(emacs_env *env, ptrdiff_t nargs,
                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
   RimeSessionId new_session_id = rime->api->create_session();
   if (new_session_id) {
     return env->make_integer(env, new_session_id);
@@ -205,6 +216,7 @@ DOCSTRING(
 static emacs_value librimel_destroy_session(emacs_env *env, ptrdiff_t nargs,
                                             emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
   RimeSessionId session_id = (RimeSessionId)env->extract_integer(env, args[0]);
 
   // Prevent destroying the default session
@@ -242,6 +254,7 @@ DOCSTRING(librimel_search, "STRING &optional LIMIT SESSION-ID",
 static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
                                    emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
   char *string = em_get_string(env, args[0]);
 
   size_t limit = 0;
@@ -320,6 +333,7 @@ DOCSTRING(librimel_get_sync_dir, "", "Get rime sync directory.");
 static emacs_value librimel_get_sync_dir(emacs_env *env, ptrdiff_t nargs,
                                          emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   const char *sync_dir = rime->api->get_sync_dir();
   return env->make_string(env, sync_dir, strlen(sync_dir));
@@ -329,6 +343,7 @@ DOCSTRING(librimel_sync_user_data, "", "Sync rime user data.");
 static emacs_value librimel_sync_user_data(emacs_env *env, ptrdiff_t nargs,
                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   bool result = rime->api->sync_user_data();
   return result ? em_t : em_nil;
@@ -338,6 +353,7 @@ DOCSTRING(librimel_get_schema_list, "", "List all rime schema.");
 static emacs_value librimel_get_schema_list(emacs_env *env, ptrdiff_t nargs,
                                             emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSchemaList schema_list;
   if (!rime->api->get_schema_list(&schema_list)) {
@@ -373,6 +389,7 @@ DOCSTRING(
 static emacs_value librimel_select_schema(emacs_env *env, ptrdiff_t nargs,
                                           emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
   const char *schema_id = em_get_string(env, args[0]);
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 1);
 
@@ -419,6 +436,7 @@ DOCSTRING(librimel_process_key, "KEYCODE &optional MASK SESSION-ID",
 static emacs_value librimel_process_key(emacs_env *env, ptrdiff_t nargs,
                                         emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   int keycode = env->extract_integer(env, args[0]);
   int mask = 0;
@@ -445,6 +463,7 @@ DOCSTRING(librimel_get_input, "&optional SESSION-ID",
 static emacs_value librimel_get_input(emacs_env *env, ptrdiff_t nargs,
                                       emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -468,6 +487,7 @@ DOCSTRING(librimel_commit_composition, "&optional SESSION-ID",
 static emacs_value librimel_commit_composition(emacs_env *env, ptrdiff_t nargs,
                                                emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -488,6 +508,7 @@ DOCSTRING(librimel_clear_composition, "&optional SESSION-ID",
 static emacs_value librimel_clear_composition(emacs_env *env, ptrdiff_t nargs,
                                               emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -506,6 +527,7 @@ DOCSTRING(librimel_select_candidate, "NUM &optional SESSION-ID",
 static emacs_value librimel_select_candidate(emacs_env *env, ptrdiff_t nargs,
                                              emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   int index = env->extract_integer(env, args[0]);
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 1);
@@ -529,6 +551,7 @@ DOCSTRING(librimel_get_commit, "&optional SESSION-ID",
 static emacs_value librimel_get_commit(emacs_env *env, ptrdiff_t nargs,
                                        emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -559,6 +582,7 @@ DOCSTRING(librimel_get_context, "&optional SESSION-ID",
 static emacs_value librimel_get_context(emacs_env *env, ptrdiff_t nargs,
                                         emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -651,6 +675,7 @@ DOCSTRING(librimel_get_status, "&optional SESSION-ID",
 static emacs_value librimel_get_status(emacs_env *env, ptrdiff_t nargs,
                                        emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
 
@@ -710,6 +735,7 @@ DOCSTRING(librimel_get_user_config,
 static emacs_value librimel_get_user_config(emacs_env *env, ptrdiff_t nargs,
                                             emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   if (nargs < 2) {
     em_signal_rimeerr(env, 2, "Invalid arguments.");
@@ -778,6 +804,7 @@ DOCSTRING(librimel_set_user_config,
 static emacs_value librimel_set_user_config(emacs_env *env, ptrdiff_t nargs,
                                             emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   if (nargs < 3) {
     em_signal_rimeerr(env, 2, "Invalid arguments.");
@@ -836,6 +863,7 @@ DOCSTRING(librimel_get_schema_config,
 static emacs_value librimel_get_schema_config(emacs_env *env, ptrdiff_t nargs,
                                               emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   if (nargs < 2) {
     em_signal_rimeerr(env, 2, "Invalid arguments.");
@@ -946,6 +974,7 @@ DOCSTRING(librimel_set_schema_config,
 static emacs_value librimel_set_schema_config(emacs_env *env, ptrdiff_t nargs,
                                               emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
 
   if (nargs < 3) {
     em_signal_rimeerr(env, 2, "Invalid arguments.");
@@ -1041,7 +1070,8 @@ void librimel_init(emacs_env *env) {
   EmacsRime *rime = (EmacsRime *)malloc(sizeof(EmacsRime));
 
   rime->api = rime_get_api();
-  rime->first_run = true; // not used yet
+  rime->first_run = true;
+  rime->initialized = false;
 
   if (!rime->api) {
     free(rime);
