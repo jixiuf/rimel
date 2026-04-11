@@ -22,36 +22,23 @@ jobs:
         with:
           version: ${{ matrix.emacs_version }}
 
-      - name: Install liberime stub
-        run: |
-          mkdir -p ~/.emacs.d/elpa/liberime-0.0.6
-          cat > ~/.emacs.d/elpa/liberime-0.0.6/liberime.el << 'STUB'
-          ;;; liberime.el --- Stub for CI -*- lexical-binding: t; -*-
-          ;; Version: 0.0.6
-          ;; Package-Requires: ((emacs "26.1"))
-          ;;; Code:
-          (defun liberime-get-commit () nil)
-          (defun liberime-get-context () nil)
-          (defun liberime-process-key (_key) nil)
-          (defun liberime-clear-composition () nil)
-          (defun liberime-search (_str _limit) nil)
-          (defun liberime-select-schema (_schema) nil)
-          (defun liberime-get-schema-list () nil)
-          (defun liberime-select-schema-interactive () nil)
-          (defun liberime-try-select-schema (_s) nil)
-          (defun liberime-deploy () nil)
-          (defun liberime-workable-p () nil)
-          (defun liberime-load () nil)
-          (defun liberime-sync () nil)
-          (provide 'liberime)
-          ;;; liberime.el ends here
-          STUB
-
       - name: Byte-compile
         run: |
+          # librimel.el calls (librimel-load) at top-level, which does
+          # (require 'librimel-core nil t) with a LOCAL load-path that
+          # only searches the package directory -- so putting a stub on
+          # the global load-path does not work.  We must provide the
+          # 'librimel-core feature BEFORE librimel.el is loaded.
           emacs --batch -Q \
             -L . \
-            -L ~/.emacs.d/elpa/liberime-0.0.6 \
+            --eval "(provide 'librimel-core)" \
+            --eval "(setq byte-compile-error-on-warn t)" \
+            -f batch-byte-compile \
+            librimel.el
+
+          emacs --batch -Q \
+            -L . \
+            --eval "(provide 'librimel-core)" \
             --eval "(setq byte-compile-error-on-warn t)" \
             -f batch-byte-compile \
             rimel.el
@@ -71,9 +58,46 @@ jobs:
         with:
           version: ${{ matrix.emacs_version }}
 
-      - name: Run tests
+      - name: Run Elisp unit tests (mocked, no librime)
         run: |
           emacs --batch -Q -L . -L test \
             -l ert \
             -l test/rimel-test.el \
             -f rimel-test-run
+
+  test-c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run C unit tests
+        run: |
+          gcc -O2 -Wall -o test/test_librimel test/test_librimel.c
+          ./test/test_librimel
+
+  test-integration:
+    # Integration tests load the C dynamic module which links against
+    # system librime and its transitive deps (libglog, libleveldb, etc.).
+    # purcell/setup-emacs provides a Nix-built Emacs with a patched
+    # dynamic linker that ignores system library paths entirely.
+    # Neither LD_LIBRARY_PATH (breaks Nix's own libc/libjansson) nor
+    # RUNPATH (doesn't propagate to transitive deps) can fix this.
+    # Solution: use the system Emacs from apt for integration tests.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emacs and librime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y emacs-nox librime-dev librime-data
+
+      - name: Build C module
+        run: make clean && make
+
+      - name: Run integration tests
+        run: |
+          emacs --batch -Q -L . -L test \
+            -l ert \
+            -l test/librimel-test.el \
+            -f librimel-test-run

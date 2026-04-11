@@ -53,18 +53,39 @@ all:$(TARGET)
 objs:$(OBJS)
 
 clean:
-	rm -rf $(OBJS) $(TARGET) build
+	rm -rf $(OBJS) $(TARGET) build test/test_librimel
 
 $(TARGET):$(OBJS)
 	rm -rf build
 	$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
+# Run pure Elisp unit tests (no librime needed, mocked C module)
 .PHONY: test
-test:$(TARGET)
+test:
 	emacs --batch -Q -L . -L test \
 	  -l ert \
 	  -l test/rimel-test.el \
 	  -f rimel-test-run
+
+# Run integration tests (requires compiled C module + librime)
+.PHONY: test-integration
+test-integration: $(TARGET)
+	emacs --batch -Q -L . -L test \
+	  -l ert \
+	  -l test/librimel-test.el \
+	  -f librimel-test-run
+
+# Run C unit tests (standalone, no Emacs needed)
+.PHONY: test-c
+test-c: test/test_librimel
+	./test/test_librimel
+
+test/test_librimel: test/test_librimel.c
+	$(CC) -O2 -Wall -o $@ $<
+
+# Run all tests
+.PHONY: test-all
+test-all: test test-c test-integration
 
 librimel-build:
 	make -f Makefile-librimel-build

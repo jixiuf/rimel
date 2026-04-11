@@ -19,6 +19,12 @@ Debug
 /*.so
 /*.dll
 /*.zip
-/Makefile-liberime-build
+/Makefile-librimel-build
 rimel-autoloads.el
 rimel-pkg.el
+
+# compiled test binary
+/test/test_librimel
+
+# byte-compiled files
+*.elc

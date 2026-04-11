@@ -1068,7 +1068,7 @@ void librimel_init(emacs_env *env) {
   DEFUN("librimel-create-session", librimel_create_session, 0, 0);
   DEFUN("librimel-destroy-session", librimel_destroy_session, 1, 1);
   DEFUN("librimel-search", librimel_search, 1, 3);
-  DEFUN("librimel-select-schema", librimel_select_schema, 1, 2);
+  DEFUN("librimel--select-schema", librimel_select_schema, 1, 2);
   DEFUN("librimel-get-schema-list", librimel_get_schema_list, 0, 0);
 
   // input

@@ -40,6 +40,8 @@
 (declare-function librimel-get-input "ext:librimel-core")
 (declare-function librimel-clear-composition "ext:librimel-core")
 (declare-function librimel-select-candidate "ext:librimel-core")
+(declare-function librimel-get-schema-list "ext:librimel-core")
+(declare-function librimel-sync-user-data "ext:librimel-core")
 
 ;;; Customization
 
