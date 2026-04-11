@@ -2,8 +2,8 @@
 
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
-;; Version: 0.1.1
-;; Package-Requires: ((emacs "25.1"))
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: convenience, Chinese, input-method, rime
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -27,29 +27,15 @@
 ;;; Code:
 (require 'cl-lib)
 
-(defcustom librimel-after-start-hook nil
-  "List of functions to be called after librimel start."
-  :group 'librimel
-  :type 'hook)
 
-(make-obsolete-variable 'after-librimel-load-hook 'librimel-after-start-hook "2019-12-13")
+(defgroup librimel nil
+  "A Emacs dynamic module provide librime bindings."
+  :group 'leim
+  :prefix "librimel-")
 
 (defcustom librimel-module-file nil
-  "Librimel module file on the system.
+  "Librimel module file (librimel-core.so) on the system.
 When it is nil, librime will auto search module in many path."
-  :group 'librimel
-  :type 'file)
-
-(defcustom librimel-shared-data-dir nil
-  "Data directory on the system.
-
-More info: https://github.com/rime/home/wiki/SharedData"
-  :group 'librimel
-  :type 'file)
-
-(defcustom librimel-user-data-dir
-  (locate-user-emacs-file "rime/")
-  "Data directory on the user home directory."
   :group 'librimel
   :type 'file)
 
@@ -58,40 +44,59 @@ More info: https://github.com/rime/home/wiki/SharedData"
   :group 'librimel
   :type 'boolean)
 
-(defvar librimel-select-schema-timer nil
-  "Timer used by `librimel-select-schema'.")
-
-(defvar librimel-current-schema nil
-  "The rime schema set by `librimel-select-schema'.")
-
-(declare-function librimel-clear-composition "ext:src/librimel-core.c")
-(declare-function librimel-commit-composition "ext:src/librimel-core.c")
+;; ============================================================================
+;; Session management note:
+;; ============================================================================
+;; - librimel-start returns the default session_id (an integer).
+;; - Save this ID if you need to pass it to other functions.
+;; - All functions below accept an optional SESSION-ID as the last argument.
+;; - When SESSION-ID is nil, the default session is used.
+;; - Use librimel-create-session to create additional independent sessions.
+;; - Use librimel-destroy-session to clean up sessions you created.
+;; - WARNING: Do NOT destroy the default session returned by librimel-start.
+;;
+;; Example usage:
+;;   ;; Basic usage (uses default session, not suggested)
+;;   (librimel-search "zhongwen")
+;;
+;;   ;; Use separate session for search to avoid interfering with current input
+;;   (let ((search-session (librimel-create-session)))
+;;     (unwind-protect
+;;         (librimel-search "zhongwen" nil search-session)
+;;       (librimel-destroy-session search-session)))
+;; ============================================================================
+;; C function declarations for the byte-compiler.
+;; use C-h f to see the args and documents of these fucnctions.
+(declare-function librimel--start "ext:src/librimel-core.c") ;use librimel-start instead
 (declare-function librimel-finalize "ext:src/librimel-core.c")
-(declare-function librimel-get-commit "ext:src/librimel-core.c")
-(declare-function librimel-get-context "ext:src/librimel-core.c")
-(declare-function librimel-get-input "ext:src/librimel-core.c")
-(declare-function librimel-get-schema-config "ext:src/librimel-core.c")
-(declare-function librimel-get-schema-list "ext:src/librimel-core.c")
-(declare-function librimel-get-status "ext:src/librimel-core.c")
-(declare-function librimel-get-sync-dir "ext:src/librimel-core.c")
-(declare-function librimel-get-user-config "ext:src/librimel-core.c")
-(declare-function librimel-process-key "ext:src/librimel-core.c")
+(declare-function librimel-create-session "ext:src/librimel-core.c")
+(declare-function librimel-destroy-session "ext:src/librimel-core.c")
 (declare-function librimel-search "ext:src/librimel-core.c")
+(declare-function librimel-process-key "ext:src/librimel-core.c")
+(declare-function librimel-get-input "ext:src/librimel-core.c")
+(declare-function librimel-get-context "ext:src/librimel-core.c")
+(declare-function librimel-get-status "ext:src/librimel-core.c")
+(declare-function librimel-get-commit "ext:src/librimel-core.c")
+(declare-function librimel-commit-composition "ext:src/librimel-core.c")
+(declare-function librimel-clear-composition "ext:src/librimel-core.c")
 (declare-function librimel-select-candidate "ext:src/librimel-core.c")
-(declare-function librimel-select-schema "ext:src/librimel-core.c")
-(declare-function librimel-set-schema-config "ext:src/librimel-core.c")
+(declare-function librimel--select-schema "ext:src/librimel-core.c")
+(declare-function librimel-get-schema-list "ext:src/librimel-core.c")
+(declare-function librimel-get-user-config "ext:src/librimel-core.c")
 (declare-function librimel-set-user-config "ext:src/librimel-core.c")
-(declare-function librimel-start "ext:src/librimel-core.c")
+(declare-function librimel-get-schema-config "ext:src/librimel-core.c")
+(declare-function librimel-set-schema-config "ext:src/librimel-core.c")
+(declare-function librimel-get-sync-dir "ext:src/librimel-core.c")
 (declare-function librimel-sync-user-data "ext:src/librimel-core.c")
 
-(defun librimel-get-library-directory ()
+(defun librimel--get-library-directory ()
   "Return the librimel package direcory."
   (let ((file (or (locate-library "librimel")
                   (locate-library "librimel-config"))))
     (when (and file (file-exists-p file))
       (file-name-directory file))))
 
-(defun librimel-find-rime-data (parent-dirs &optional names)
+(defun librimel--find-rime-data (parent-dirs &optional names)
   "Find directories listed in NAMES from PARENT-DIRS.
 
 if NAMES is nil, \"rime-data\" as fallback."
@@ -105,23 +110,21 @@ if NAMES is nil, \"rime-data\" as fallback."
                            `(,@parent-dirs ,@(xdg-data-dirs))
                          parent-dirs))))
 
-(defun librimel-get-shared-data-dir ()
+(defun librimel--get-shared-data-dir ()
   "Return user data directory."
-  (or librimel-shared-data-dir
-      ;; Guess
-      (cl-case system-type
-        ('gnu/linux
-         (librimel-find-rime-data
+  (cl-case system-type
+        (gnu/linux
+         (librimel--find-rime-data
           '("/usr/share/local"
             "/usr/share"
             ;; GuixOS support
             "~/.guix-home/profile/share"
             "~/.guix-profile/share"
             "/run/current-system/profile/share")))
-        ('darwin
+        (darwin
          "/Library/Input Methods/Squirrel.app/Contents/SharedSupport")
-        ('windows-nt
-         (librimel-find-rime-data
+        (windows-nt
+         (librimel--find-rime-data
           (list
            (let ((file (executable-find "emacs")))
              (when (and file (file-exists-p file))
@@ -131,61 +134,19 @@ if NAMES is nil, \"rime-data\" as fallback."
            "c:/" "d:/" "e:/" "f:/" "g:/")
           '("rime-data"
             "msys32/mingw32/share/rime-data"
-            "msys64/mingw64/share/rime-data"))))
-      ;; Fallback to user data dir.
-      (librimel-get-user-data-dir)))
+            "msys64/mingw64/share/rime-data")))))
 
-(defun librimel-get-user-data-dir ()
+(defun librimel--get-user-data-dir ()
   "Return user data directory, create it if necessary."
-  (let ((directory (expand-file-name librimel-user-data-dir)))
+  (let ((directory (expand-file-name (locate-user-emacs-file "rime/"))))
     (unless (file-directory-p directory)
       (make-directory directory))
     directory))
 
-(declare-function w32-shell-execute "w32fns")
-
-(defun librimel-open-directory (directory)
-  "Open DIRECTORY with external app."
-  (let ((directory (expand-file-name directory)))
-    (when (file-directory-p directory)
-      (cond ((string-equal system-type "windows-nt")
-             (w32-shell-execute "open" directory))
-            ((string-equal system-type "darwin")
-             (concat "open " (shell-quote-argument directory)))
-            ((string-equal system-type "gnu/linux")
-             (let ((process-connection-type nil))
-               (start-process "" nil "xdg-open" directory)))))))
-
-;;;###autoload
-(defun librimel-open-user-data-dir ()
-  "Open user data dir with external app."
-  (interactive)
-  (librimel-open-directory (librimel-get-user-data-dir)))
-
-;;;###autoload
-(defun librimel-open-shared-data-dir ()
-  "Open shared data dir with external app."
-  (interactive)
-  (librimel-open-directory (librimel-get-shared-data-dir)))
-
-;;;###autoload
-(defun librimel-open-package-directory ()
-  "Open librimel library directory with external app."
-  (interactive)
-  (librimel-open-directory (librimel-get-library-directory)))
-
-;;;###autoload
-(defun librimel-open-package-readme ()
-  "Open librimel library README.org."
-  (interactive)
-  (find-file (concat (librimel-get-library-directory) "README.org")))
-
-;;;###autoload
 (defun librimel-build ()
   "Build librimel-core module."
-  (interactive)
   (let ((buffer (get-buffer-create "*librimel build help*"))
-        (dir (librimel-get-library-directory)))
+        (dir (librimel--get-library-directory)))
     (if (not (and dir (file-directory-p dir)))
         (message "Librimel: library directory is not found.")
       (message "Librimel: start build librimel-core module ...")
@@ -248,145 +209,93 @@ if NAMES is nil, \"rime-data\" as fallback."
                (pop-to-buffer buffer)
                (error "Librimel: building failed with exit code %d" (process-exit-status proc))))))))))
 
-(defun librimel-workable-p ()
-  "Return t when librimel can work."
-  (featurep 'librimel-core))
-
-(defun librimel--start ()
-  "Start librimel."
-  (let ((shared-dir (librimel-get-shared-data-dir))
-        (user-dir (librimel-get-user-data-dir)))
-    (message "Librimel: start with shared dir: %S" shared-dir)
-    (message "Librimel: start with user dir: %S" user-dir)
-    (message "")
-    (librimel-start shared-dir user-dir)
-    (when librimel-current-schema
-      (librimel-try-select-schema librimel-current-schema))
-    (run-hooks 'librimel-after-start-hook)))
-
-;;;###autoload
 (defun librimel-load ()
   "Load librimel-core module."
-  (interactive)
-  (when (and librimel-module-file
-             (file-exists-p librimel-module-file)
-             (not (featurep 'librimel-core)))
-    (load-file librimel-module-file))
-  (let* ((libdir (librimel-get-library-directory))
-         (load-path
-          (list libdir
-                (concat libdir "src")
-                (concat libdir "build"))))
-    (require 'librimel-core nil t))
-  (if (featurep 'librimel-core)
-      (librimel--start)
-    (if librimel-auto-build
-        (librimel-build)
-      (let ((buf (get-buffer-create "*librimel load*")))
-        (with-current-buffer buf
-          (erase-buffer)
-          (insert "Librimel: Fail to load librimel-core module, try to run command: (librimel-build)")
-          (goto-char (point-min)))
-        (pop-to-buffer buf)))))
+  (unless (featurep 'librimel-core)
+    (when (and librimel-module-file (file-exists-p librimel-module-file))
+      (load-file librimel-module-file))
+    (let* ((libdir (librimel--get-library-directory))
+           (load-path (list libdir
+                            (concat libdir "src")
+                            (concat libdir "build"))))
+      (require 'librimel-core nil t))
+    (unless (featurep 'librimel-core)
+      (if librimel-auto-build
+          (librimel-build)
+        (user-error "librimel: Fail to load librimel-core module, try to eval: (librimel-build)")))))
 
-(librimel-load)
+(defun librimel-start (&optional schema-id shared-dir user-dir)
+  "Deploy librimel and return the session id if success."
+  (when-let* ((user-dir (or user-dir (librimel--get-user-data-dir)))
+              (shared-dir (or shared-dir (librimel--get-shared-data-dir)
+                              user-dir))
+              (session-id (librimel--start shared-dir user-dir)))
+    (when schema-id (librimel-select-schema schema-id))
+    (message "librimel: start with shared_dir: %S user_dir: %S"
+             shared-dir user-dir)
+    ;; librimel-start returns the default session_id.
+    ;; Users can save this if they need to track it,
+    ;; but it's managed internally.
+    session-id))
 
-(defun librimel-get-preedit ()
-  "Get rime preedit."
-  (let* ((context (librimel-get-context))
+;;; Utility functions with optional session-id support
+
+(defun librimel-get-preedit (&optional session-id)
+  "Get rime preedit from the session.
+SESSION-ID optionally specifies which session to query (nil = default)."
+  (let* ((context (librimel-get-context session-id))
          (composition (alist-get 'composition context))
          (preedit (alist-get 'preedit composition)))
     preedit))
 
-(defun librimel-get-page-size ()
-  "Get rime page size from context."
-  (let* ((context (librimel-get-context))
+(defun librimel-get-page-size (&optional session-id)
+  "Get rime page size from the session.
+SESSION-ID optionally specifies which session to query (nil = default)."
+  (let* ((context (librimel-get-context session-id))
          (menu (alist-get 'menu context))
          (page-size (alist-get 'page-size menu)))
     page-size))
 
-(defun librimel-select-candidate-crosspage (num)
+(defun librimel-select-candidate-crosspage (num &optional session-id)
   "Select rime candidate cross page.
 
-This function is different from `librimel-select-candidate', When
+NUM is the candidate number (1-indexed).
+SESSION-ID optionally specifies which session to use (nil = default).
+
+This function is different from `librimel-select-candidate': When
 NUM > page size, `librimel-select-candidate' do nothing, while
 this function will go to proper page then select a candidate."
-  (let* ((page-size (librimel-get-page-size))
+  (let* ((page-size (librimel-get-page-size session-id))
          (position (- num 1))
          (page-n (/ position page-size))
          (n (% position page-size)))
-    (librimel-process-key 65360) ;回退到第一页
+    (librimel-process-key 65360 nil session-id) ; 回退到第一页
     (dotimes (_ page-n)
-      (librimel-process-key 65366)) ;发送翻页
-    (librimel-select-candidate n)))
+      (librimel-process-key 65366 nil session-id)) ; 发送翻页
+    (librimel-select-candidate n session-id)))
 
-(defun librimel-clear-commit ()
-  "Clear the lastest rime commit."
-  ;; NEED IMPROVE: Second run `librimel-get-commit' will clear commit.
-  (librimel-get-commit))
+(defun librimel-clear-commit (&optional session-id)
+  "Clear the latest rime commit from the session.
+SESSION-ID optionally specifies which session to use (nil = default).
 
-;;;###autoload
-(defun librimel-deploy()
-  "Deploy librimel to affect config file change."
-  (interactive)
-  (librimel-finalize)
-  (librimel--start))
+NOTE: Second run `librimel-get-commit' will clear commit."
+  (librimel-get-commit session-id))
 
-;;;###autoload
-(defun librimel-set-page-size (page-size)
-  "Set rime page-size to PAGE-SIZE or by default 10.
-you also need to call `librimel-deploy' to make it take affect
-you only need to do this once."
-  (interactive "P")
-  (librimel-set-user-config "default.custom" "patch/menu/page_size" (or page-size 10) "int"))
+(defun librimel-current-schema-id (&optional session-id)
+  "Get current schema id from the session.
+SESSION-ID optionally specifies which session to use (nil = default)."
+  (when-let* ((status (librimel-get-status session-id)))
+    (alist-get 'schema_id status)))
 
-(defun librimel-try-select-schema (schema_id)
-  "Try to select rime schema with SCHEMA_ID."
-  (let ((n 1))
-    (setq librimel-current-schema schema_id)
-    (when (featurep 'librimel-core)
-      (when librimel-select-schema-timer
-        (cancel-timer librimel-select-schema-timer))
-      (setq librimel-select-schema-timer
-            (run-with-timer
-             1 2
-             (lambda ()
-               (let ((id (alist-get 'schema_id (ignore-errors (librimel-get-status)))))
-                 (cond ((or (equal id schema_id)
-                            (> n 10))
-                        (if (> n 10)
-                            (message "Librimel: fail to select schema %S." schema_id)
-                          (message "Librimel: success to select schema %S." schema_id))
-                        (message "")
-                        (cancel-timer librimel-select-schema-timer)
-                        (setq librimel-select-schema-timer nil))
-                       (t (message "Librimel: try (n=%s) to select schema %S ..." n schema_id)
-                          (ignore-errors (librimel-select-schema schema_id))))
-                 (setq n (+ n 1))))))
-      t)))
+(defun librimel-select-schema (schema_id &optional session-id)
+  "Select rime schema with SCHEMA_ID, Returns: t on success, nil otherwise."
+  (let ((succ (librimel--select-schema schema_id session-id)))
+    (unless succ
+      (message "librimel: failed to select schema: %S" schema_id))
+    succ))
 
-;;;###autoload
-(defun librimel-select-schema-interactive ()
-  "Select a rime schema interactive."
-  (interactive)
-  (let ((schema-list
-         (mapcar (lambda (x)
-                   (cons (format "%s(%s)" (cadr x) (car x))
-                         (car x)))
-                 (ignore-errors (librimel-get-schema-list)))))
-    (if schema-list
-        (let* ((schema-name (completing-read "Rime schema: " schema-list))
-               (schema (alist-get schema-name schema-list nil nil #'equal)))
-          (librimel-try-select-schema schema))
-      (message "Librimel: no schema has been found, ignore."))))
 
-;;;###autoload
-(defun librimel-sync ()
-  "Sync rime user data.
-User should specify sync_dir in installation.yaml file of
-`librimel-user-data-dir' directory."
-  (interactive)
-  (librimel-sync-user-data))
+(librimel-load)
 
 (provide 'librimel)
 

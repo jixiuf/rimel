@@ -3,7 +3,7 @@
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.4") (librimel "0.0.6"))
+;; Package-Requires: ((emacs "29.4") (librimel "0.1.0"))
 ;; Keywords: convenience, Chinese, input-method, rime
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -45,14 +45,32 @@
 
 (defgroup rimel nil
   "Lightweight Rime input method for Emacs."
-  :group 'leim
+  :group 'librimel
   :prefix "rimel-")
+
+(defcustom rimel-deploy-hook nil
+  "List of functions to be called after deploying rime."
+  :group 'rimel
+  :type 'hook)
 
 (defcustom rimel-schema nil
   "Rime schema ID to use (e.g., \"luna_pinyin_simp\").
 When nil, use the default schema configured in Rime."
   :type '(choice (const :tag "Default" nil) string)
   :group 'rimel)
+
+(defcustom rimel-shared-data-dir nil
+  "Data directory on the system.
+
+More info: https://github.com/rime/home/wiki/SharedData"
+  :group 'rimel
+  :type 'file)
+
+(defcustom rimel-user-data-dir
+  (locate-user-emacs-file "rime/")
+  "Data directory on the user home directory."
+  :group 'rimel
+  :type 'file)
 
 (defcustom rimel-show-candidate
   (or (require 'posframe nil t) 'echo-area)
@@ -252,6 +270,8 @@ display as [c d e a b]."
 
 ;;; Internal variables
 
+(defvar rimel--session-id nil
+  "Default session after deploying rime.")
 (defvar rimel--preedit-overlay nil
   "Overlay for displaying preedit at cursor.")
 
@@ -272,10 +292,8 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
   "Activate rimel input method.
 Called by Emacs when user selects the \"rimel\" input method.
 _NAME is the input method name (unused)."
-  (unless (librimel-workable-p)
-    (librimel-load))
-  (when (and rimel-schema (librimel-workable-p))
-    (librimel-try-select-schema rimel-schema))
+  (unless rimel--session-id
+    (rimel-deploy))
   (setq-local input-method-function #'rimel-input-method)
   (setq-local deactivate-current-input-method-function #'rimel-deactivate))
 
@@ -776,14 +794,39 @@ to detecting $ and \\ prefixes."
                (or (eq ch ?$) (eq ch ?\\)))))))
 
 
-;;;###autoload (autoload 'rimel-select-schema "rimel" "Select a rime schema interactive." t)
-(defalias 'rimel-select-schema #'librimel-select-schema-interactive)
+;;;###autoload
+(defun rimel-select-schema ()
+  "Select a rime schema."
+  (interactive)
+  (let ((schema-list
+         (mapcar (lambda (x)
+                   (cons (format "%s(%s)" (cadr x) (car x))
+                         (car x)))
+                 (ignore-errors (librimel-get-schema-list)))))
+    (if schema-list
+        (let* ((schema-name (completing-read "Rime schema: " schema-list))
+               (schema (alist-get schema-name schema-list nil nil #'equal)))
+          (librimel-select-schema schema))
+      (message "Librimel: no schema has been found, ignored."))))
 
-;;;###autoload (autoload 'rimel-deploy "rimel" "Deploy librimel to affect config file change." t)
-(defalias 'rimel-deploy #'librimel-deploy)
 
-;;;###autoload (autoload 'rimel-sync "rimel" "Sync rime user data." t)
-(defalias 'rimel-sync #'librimel-sync)
+;;;###autoload
+(defun rimel-deploy()
+  "Deploy rime."
+  (interactive)
+  (when-let* ((session-id (librimel-start
+                           rimel-schema rimel-shared-data-dir
+                           rimel-user-data-dir)))
+    (run-hooks 'rimel-deploy-hook)
+    (setq rimel--session-id session-id)))
+
+;;;###autoload
+(defun rimel-sync ()
+  "Sync rime user data.
+User should specify sync_dir in installation.yaml file of
+`librimel-user-data-dir' directory."
+  (interactive)
+  (librimel-sync-user-data))
 
 ;;; Registration
 
