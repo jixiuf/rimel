@@ -294,6 +294,12 @@ SESSION-ID optionally specifies which session to use (nil = default)."
       (message "librimel: failed to select schema: %S" schema_id))
     succ))
 
+(defun librimel--finalize-on-exit ()
+  "Finalize librime when Emacs is about to exit."
+  (when (featurep 'librimel-core)
+    (ignore-errors (librimel-finalize))))
+
+(add-hook 'kill-emacs-hook #'librimel--finalize-on-exit)
 
 (librimel-load)
 
