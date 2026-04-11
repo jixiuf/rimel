@@ -64,17 +64,6 @@ typedef struct _EmacsRimeCandidates {
 
 void notification_handler(void *context, RimeSessionId session_id,
                           const char *message_type, const char *message_value) {
-  /* EmacsRime *rime = (EmacsRime*) context; */
-  /* emacs_env *env = rime->EmacsEnv; */
-  /* char format[] = "[librimel] %s: %s"; */
-  /* emacs_value args[3]; */
-  /* args[0] = env->make_string(env, format, strnlen(format, SCHEMA_MAXSTRLEN));
-   */
-  /* args[1] = env->make_string(env, message_type, strnlen(message_type,
-   * SCHEMA_MAXSTRLEN)); */
-  /* args[2] = env->make_string(env, message_value, strnlen(message_value,
-   * SCHEMA_MAXSTRLEN)); */
-  /* env->funcall(env, env->intern (env, "message"), 3, args); */
 }
 
 // Get session_id from args. If not provided or nil, use default session_id.
@@ -238,11 +227,6 @@ void free_candidate_list(CandidateLinkedList *list) {
   while (next) {
     CandidateLinkedList *temp = next;
     next = temp->next;
-    // do not free temp->value
-    // it seems emacs_env->make_string didn't do copy
-    /* if (temp->value) { */
-    /*    free(temp->value); */
-    /* } */
     free(temp);
   }
 }

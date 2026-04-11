@@ -122,17 +122,11 @@ emacs_value em_propertize(emacs_env *env, emacs_value target, const char *key,
 }
 
 emacs_value em_string(emacs_env *env, char *str) {
-  // always copy string
   if (str) {
-    size_t size = strnlen(str, MAX_STRLEN);
-    char *new_str = malloc(size + 1);
-    strncpy(new_str, str, size);
-    return env->make_string(env, new_str, size);
+    return env->make_string(env, str, strnlen(str, MAX_STRLEN));
   } else {
     return em_nil;
   }
 }
 
-emacs_value em_symbol(emacs_env *env, const char *str) {
-  return INTERN(str);
-}
+emacs_value em_symbol(emacs_env *env, const char *str) { return INTERN(str); }
