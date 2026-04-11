@@ -16,12 +16,12 @@
  * @param docstring The rest of the documentation.
  */
 #define DOCSTRING(name, args, docstring)                                       \
-  const char *librimel_##name##__doc = (docstring "\n\n(fn " args ")")
+  const char *name##__doc = (docstring "\n\n(fn " args ")")
 
 #define DEFUN(ename, cname, min_nargs, max_nargs)                              \
   em_defun(env, (ename),                                                       \
            env->make_function(env, (min_nargs), (max_nargs), cname,            \
-                              librimel_##cname##__doc, rime))
+                              cname##__doc, rime))
 
 #define CONS_INT(key, integer)                                                 \
   em_cons(env, env->intern(env, key), env->make_integer(env, integer));
@@ -131,9 +131,10 @@ EmacsRimeCandidates _get_candidates(EmacsRime *rime, RimeSessionId session_id,
 }
 
 // bindings
-DOCSTRING(start, "SHARED_DATA_DIR USER_DATA_DIR", "Start a rime session.");
-static emacs_value start(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                         void *data) {
+DOCSTRING(librimel_start, "SHARED_DATA_DIR USER_DATA_DIR",
+          "Start a rime session.");
+static emacs_value librimel_start(emacs_env *env, ptrdiff_t nargs,
+                                  emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   char *shared_data_dir = em_get_string(env, em_expand_file_name(env, args[0]));
@@ -173,9 +174,9 @@ static emacs_value start(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return env->make_integer(env, rime->session_id);
 }
 
-DOCSTRING(finalize, "", "Finalize librime for redeploy.");
-static emacs_value finalize(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                            void *data) {
+DOCSTRING(librimel_finalize, "", "Finalize librime for redeploy.");
+static emacs_value librimel_finalize(emacs_env *env, ptrdiff_t nargs,
+                                     emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   if (rime->session_id) {
     rime->api->destroy_session(rime->session_id);
@@ -185,9 +186,10 @@ static emacs_value finalize(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return em_t;
 }
 
-DOCSTRING(create_session, "", "Create a new rime session and return its id.");
-static emacs_value create_session(emacs_env *env, ptrdiff_t nargs,
-                                  emacs_value args[], void *data) {
+DOCSTRING(librimel_create_session, "",
+          "Create a new rime session and return its id.");
+static emacs_value librimel_create_session(emacs_env *env, ptrdiff_t nargs,
+                                           emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   RimeSessionId new_session_id = rime->api->create_session();
   if (new_session_id) {
@@ -197,11 +199,11 @@ static emacs_value create_session(emacs_env *env, ptrdiff_t nargs,
 }
 
 DOCSTRING(
-    destroy_session, "SESSION_ID",
+    librimel_destroy_session, "SESSION_ID",
     "Destroy a rime session.\n"
     "Note: Cannot destroy the default session created by librimel-start.");
-static emacs_value destroy_session(emacs_env *env, ptrdiff_t nargs,
-                                   emacs_value args[], void *data) {
+static emacs_value librimel_destroy_session(emacs_env *env, ptrdiff_t nargs,
+                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   RimeSessionId session_id = (RimeSessionId)env->extract_integer(env, args[0]);
 
@@ -233,12 +235,12 @@ void free_candidate_list(CandidateLinkedList *list) {
   }
 }
 
-DOCSTRING(search, "STRING &optional LIMIT SESSION-ID",
+DOCSTRING(librimel_search, "STRING &optional LIMIT SESSION-ID",
           "Input STRING and return LIMIT number candidates.\n"
           "When LIMIT is nil, return all candidates.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value search(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
-                          void *data) {
+static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
+                                   emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   char *string = em_get_string(env, args[0]);
 
@@ -300,27 +302,27 @@ static emacs_value search(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
   return result;
 }
 
-DOCSTRING(get_sync_dir, "", "Get rime sync directory.");
-static emacs_value get_sync_dir(emacs_env *env, ptrdiff_t nargs,
-                                emacs_value args[], void *data) {
+DOCSTRING(librimel_get_sync_dir, "", "Get rime sync directory.");
+static emacs_value librimel_get_sync_dir(emacs_env *env, ptrdiff_t nargs,
+                                         emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   const char *sync_dir = rime->api->get_sync_dir();
   return env->make_string(env, sync_dir, strlen(sync_dir));
 }
 
-DOCSTRING(sync_user_data, "", "Sync rime user data.");
-static emacs_value sync_user_data(emacs_env *env, ptrdiff_t nargs,
-                                  emacs_value args[], void *data) {
+DOCSTRING(librimel_sync_user_data, "", "Sync rime user data.");
+static emacs_value librimel_sync_user_data(emacs_env *env, ptrdiff_t nargs,
+                                           emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   bool result = rime->api->sync_user_data();
   return result ? em_t : em_nil;
 }
 
-DOCSTRING(get_schema_list, "", "List all rime schema.");
-static emacs_value get_schema_list(emacs_env *env, ptrdiff_t nargs,
-                                   emacs_value args[], void *data) {
+DOCSTRING(librimel_get_schema_list, "", "List all rime schema.");
+static emacs_value librimel_get_schema_list(emacs_env *env, ptrdiff_t nargs,
+                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSchemaList schema_list;
@@ -350,12 +352,12 @@ static emacs_value get_schema_list(emacs_env *env, ptrdiff_t nargs,
 }
 
 DOCSTRING(
-    select_schema, "SCHEMA_ID &optional SESSION-ID",
+    librimel_select_schema, "SCHEMA-ID &optional SESSION-ID",
     "Select a rime schema.\n"
-    "SCHENA_ID should be a value returned from `librimel-get-schema-list'.\n"
+    "SCHENA-ID should be a value returned from `librimel-get-schema-list'.\n"
     "When SESSION-ID is provided, use that session.");
-static emacs_value select_schema(emacs_env *env, ptrdiff_t nargs,
-                                 emacs_value args[], void *data) {
+static emacs_value librimel_select_schema(emacs_env *env, ptrdiff_t nargs,
+                                          emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   const char *schema_id = em_get_string(env, args[0]);
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 1);
@@ -376,11 +378,11 @@ static emacs_value select_schema(emacs_env *env, ptrdiff_t nargs,
 }
 
 // input
-DOCSTRING(process_key, "KEYCODE &optional MASK SESSION-ID",
+DOCSTRING(librimel_process_key, "KEYCODE &optional MASK SESSION-ID",
           "Send KEYCODE to rime session and process it.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value process_key(emacs_env *env, ptrdiff_t nargs,
-                               emacs_value args[], void *data) {
+static emacs_value librimel_process_key(emacs_env *env, ptrdiff_t nargs,
+                                        emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   int keycode = env->extract_integer(env, args[0]);
@@ -402,11 +404,11 @@ static emacs_value process_key(emacs_env *env, ptrdiff_t nargs,
   return em_nil;
 }
 
-DOCSTRING(get_input, "&optional SESSION-ID",
+DOCSTRING(librimel_get_input, "&optional SESSION-ID",
           "Get rime input.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value get_input(emacs_env *env, ptrdiff_t nargs,
-                             emacs_value args[], void *data) {
+static emacs_value librimel_get_input(emacs_env *env, ptrdiff_t nargs,
+                                      emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -425,11 +427,11 @@ static emacs_value get_input(emacs_env *env, ptrdiff_t nargs,
   }
 }
 
-DOCSTRING(commit_composition, "&optional SESSION-ID",
+DOCSTRING(librimel_commit_composition, "&optional SESSION-ID",
           "Commit rime composition.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value commit_composition(emacs_env *env, ptrdiff_t nargs,
-                                      emacs_value args[], void *data) {
+static emacs_value librimel_commit_composition(emacs_env *env, ptrdiff_t nargs,
+                                               emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -445,11 +447,11 @@ static emacs_value commit_composition(emacs_env *env, ptrdiff_t nargs,
   return em_nil;
 }
 
-DOCSTRING(clear_composition, "&optional SESSION-ID",
+DOCSTRING(librimel_clear_composition, "&optional SESSION-ID",
           "Clear rime composition.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value clear_composition(emacs_env *env, ptrdiff_t nargs,
-                                     emacs_value args[], void *data) {
+static emacs_value librimel_clear_composition(emacs_env *env, ptrdiff_t nargs,
+                                              emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -463,11 +465,11 @@ static emacs_value clear_composition(emacs_env *env, ptrdiff_t nargs,
   return em_t;
 }
 
-DOCSTRING(select_candidate, "NUM &optional SESSION-ID",
+DOCSTRING(librimel_select_candidate, "NUM &optional SESSION-ID",
           "Select a rime candidate by NUM.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value select_candidate(emacs_env *env, ptrdiff_t nargs,
-                                    emacs_value args[], void *data) {
+static emacs_value librimel_select_candidate(emacs_env *env, ptrdiff_t nargs,
+                                             emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   int index = env->extract_integer(env, args[0]);
@@ -486,11 +488,11 @@ static emacs_value select_candidate(emacs_env *env, ptrdiff_t nargs,
 
 // output
 
-DOCSTRING(get_commit, "&optional SESSION-ID",
+DOCSTRING(librimel_get_commit, "&optional SESSION-ID",
           "Get rime commit.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value get_commit(emacs_env *env, ptrdiff_t nargs,
-                              emacs_value args[], void *data) {
+static emacs_value librimel_get_commit(emacs_env *env, ptrdiff_t nargs,
+                                       emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -516,11 +518,11 @@ static emacs_value get_commit(emacs_env *env, ptrdiff_t nargs,
   return em_nil;
 }
 
-DOCSTRING(get_context, "&optional SESSION-ID",
+DOCSTRING(librimel_get_context, "&optional SESSION-ID",
           "Get rime context.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value get_context(emacs_env *env, ptrdiff_t nargs,
-                               emacs_value args[], void *data) {
+static emacs_value librimel_get_context(emacs_env *env, ptrdiff_t nargs,
+                                        emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -608,11 +610,11 @@ static emacs_value get_context(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
-DOCSTRING(get_status, "&optional SESSION-ID",
+DOCSTRING(librimel_get_status, "&optional SESSION-ID",
           "Get rime status.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value get_status(emacs_env *env, ptrdiff_t nargs,
-                              emacs_value args[], void *data) {
+static emacs_value librimel_get_status(emacs_env *env, ptrdiff_t nargs,
+                                       emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   RimeSessionId session_id = _get_session(rime, env, nargs, args, 0);
@@ -666,11 +668,12 @@ static emacs_value get_status(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
-DOCSTRING(get_user_config, "USER-CONFIG OPTION &optional RETURN-VALUE-TYPE",
+DOCSTRING(librimel_get_user_config,
+          "USER-CONFIG OPTION &optional RETURN-VALUE-TYPE",
           "Get OPTION of rime USER-CONFIG.\n"
           "The return value type can be set with RETURN-VALUE-TYPE.");
-static emacs_value get_user_config(emacs_env *env, ptrdiff_t nargs,
-                                   emacs_value args[], void *data) {
+static emacs_value librimel_get_user_config(emacs_env *env, ptrdiff_t nargs,
+                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   if (nargs < 2) {
@@ -733,11 +736,12 @@ static emacs_value get_user_config(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
-DOCSTRING(set_user_config, "USER-CONFIG OPTION VALUE &optional VALUE-TYPE",
+DOCSTRING(librimel_set_user_config,
+          "USER-CONFIG OPTION VALUE &optional VALUE-TYPE",
           "Set rime USER-CONFIG OPTION to VALUE.\n"
           "When VALUE-TYPE is non-nil, VALUE will be converted to this type.");
-static emacs_value set_user_config(emacs_env *env, ptrdiff_t nargs,
-                                   emacs_value args[], void *data) {
+static emacs_value librimel_set_user_config(emacs_env *env, ptrdiff_t nargs,
+                                            emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   if (nargs < 3) {
@@ -789,13 +793,13 @@ static emacs_value set_user_config(emacs_env *env, ptrdiff_t nargs,
   return em_t;
 }
 
-DOCSTRING(get_schema_config,
+DOCSTRING(librimel_get_schema_config,
           "SCHEMA-CONFIG OPTION &optional RETURN-VALUE-TYPE SESSION-ID",
           "Get OPTION of rime SCHEMA-CONFIG.\n"
           "The return value type can be set with RETURN-VALUE-TYPE.\n"
           "When SESSION-ID is provided, use that session.");
-static emacs_value get_schema_config(emacs_env *env, ptrdiff_t nargs,
-                                     emacs_value args[], void *data) {
+static emacs_value librimel_get_schema_config(emacs_env *env, ptrdiff_t nargs,
+                                              emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   if (nargs < 2) {
@@ -898,14 +902,14 @@ static emacs_value get_schema_config(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
-DOCSTRING(set_schema_config,
+DOCSTRING(librimel_set_schema_config,
           "SCHEMA-CONFIG OPTION VALUE &optional VALUE-TYPE SESSION-ID",
           "Set rime SCHEMA-CONFIG OPTION to VALUE.\n"
           "When VALUE-TYPE is non-nil, VALUE will be converted to this type.\n"
           "When SESSION-ID is provided, use that session for getting current "
           "schema.");
-static emacs_value set_schema_config(emacs_env *env, ptrdiff_t nargs,
-                                     emacs_value args[], void *data) {
+static emacs_value librimel_set_schema_config(emacs_env *env, ptrdiff_t nargs,
+                                              emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
 
   if (nargs < 3) {
@@ -1010,37 +1014,37 @@ void librimel_init(emacs_env *env) {
     return;
   }
 
-  DEFUN("librimel--start", start, 2, 2);
-  DEFUN("librimel-finalize", finalize, 0, 0);
-  DEFUN("librimel-create-session", create_session, 0, 0);
-  DEFUN("librimel-destroy-session", destroy_session, 1, 1);
-  DEFUN("librimel-search", search, 1, 3);
-  DEFUN("librimel-select-schema", select_schema, 1, 2);
-  DEFUN("librimel-get-schema-list", get_schema_list, 0, 0);
+  DEFUN("librimel--start", librimel_start, 2, 2);
+  DEFUN("librimel-finalize", librimel_finalize, 0, 0);
+  DEFUN("librimel-create-session", librimel_create_session, 0, 0);
+  DEFUN("librimel-destroy-session", librimel_destroy_session, 1, 1);
+  DEFUN("librimel-search", librimel_search, 1, 3);
+  DEFUN("librimel-select-schema", librimel_select_schema, 1, 2);
+  DEFUN("librimel-get-schema-list", librimel_get_schema_list, 0, 0);
 
   // input
-  DEFUN("librimel-process-key", process_key, 1, 3);
-  DEFUN("librimel-commit-composition", commit_composition, 0, 1);
-  DEFUN("librimel-clear-composition", clear_composition, 0, 1);
-  DEFUN("librimel-select-candidate", select_candidate, 1, 2);
-  DEFUN("librimel-get-input", get_input, 0, 1);
+  DEFUN("librimel-process-key", librimel_process_key, 1, 3);
+  DEFUN("librimel-commit-composition", librimel_commit_composition, 0, 1);
+  DEFUN("librimel-clear-composition", librimel_clear_composition, 0, 1);
+  DEFUN("librimel-select-candidate", librimel_select_candidate, 1, 2);
+  DEFUN("librimel-get-input", librimel_get_input, 0, 1);
 
   // output
-  DEFUN("librimel-get-commit", get_commit, 0, 1);
-  DEFUN("librimel-get-context", get_context, 0, 1);
+  DEFUN("librimel-get-commit", librimel_get_commit, 0, 1);
+  DEFUN("librimel-get-context", librimel_get_context, 0, 1);
 
   // status
-  DEFUN("librimel-get-status", get_status, 0, 1);
+  DEFUN("librimel-get-status", librimel_get_status, 0, 1);
 
   // sync (global operations, no session-id needed)
-  DEFUN("librimel-get-sync-dir", get_sync_dir, 0, 0);
-  DEFUN("librimel-sync-user-data", sync_user_data, 0, 0);
+  DEFUN("librimel-get-sync-dir", librimel_get_sync_dir, 0, 0);
+  DEFUN("librimel-sync-user-data", librimel_sync_user_data, 0, 0);
 
   // user config (global operations, no session-id needed)
-  DEFUN("librimel-get-user-config", get_user_config, 2, 3);
-  DEFUN("librimel-set-user-config", set_user_config, 3, 4);
+  DEFUN("librimel-get-user-config", librimel_get_user_config, 2, 3);
+  DEFUN("librimel-set-user-config", librimel_set_user_config, 3, 4);
 
   // schema config (session-id only used for get_current_schema)
-  DEFUN("librimel-get-schema-config", get_schema_config, 2, 4);
-  DEFUN("librimel-set-schema-config", set_schema_config, 3, 5);
+  DEFUN("librimel-get-schema-config", librimel_get_schema_config, 2, 4);
+  DEFUN("librimel-set-schema-config", librimel_set_schema_config, 3, 5);
 }
