@@ -247,18 +247,29 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
   size_t limit = 0;
   if (nargs >= 2 && env->is_not_nil(env, args[1])) {
     limit = env->extract_integer(env, args[1]);
-    // if limit set to 0 return nil immediately
     if (limit == 0) {
       free(string);
       return em_nil;
     }
   }
 
-  // Get session_id from args (index 2)
-  RimeSessionId session_id = _get_session(rime, env, nargs, args, 2);
+  RimeSessionId session_id = 0;
+  bool should_destroy_session = false;
 
-  if (!_ensure_given_session(rime, session_id)) {
-    em_signal_rimeerr(env, 1, NO_SESSION_ERR);
+  if (nargs > 2 && env->is_not_nil(env, args[2])) {
+    session_id = (RimeSessionId)env->extract_integer(env, args[2]);
+    if (!_ensure_given_session(rime, session_id)) {
+      em_signal_rimeerr(env, 1, NO_SESSION_ERR);
+      free(string);
+      return em_nil;
+    }
+  } else {
+    session_id = rime->api->create_session();
+    should_destroy_session = true;
+  }
+
+  if (!session_id) {
+    em_signal_rimeerr(env, 1, "Cannot create session.");
     free(string);
     return em_nil;
   }
@@ -268,10 +279,11 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
 
   EmacsRimeCandidates candidates = _get_candidates(rime, session_id, limit);
 
-  // printf("%s: find candidates size: %ld\n", string, candidates.size);
-  // return nil if no candidates found
   if (candidates.size == 0) {
     free_candidate_list(candidates.list);
+    if (should_destroy_session) {
+      rime->api->destroy_session(session_id);
+    }
     free(string);
     return em_nil;
   }
@@ -290,14 +302,16 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
     array[i++] = value;
     next = next->next;
   }
-  // printf("conveted array size: %d\n", i);
 
   emacs_value result = em_list(env, candidates.size, array);
 
-  // free(candidates.candidates);
   free_candidate_list(candidates.list);
   free(array);
   free(string);
+
+  if (should_destroy_session) {
+    rime->api->destroy_session(session_id);
+  }
 
   return result;
 }

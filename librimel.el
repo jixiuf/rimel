@@ -51,15 +51,19 @@ When it is nil, librime will auto search module in many path."
 ;; - Save this ID if you need to pass it to other functions.
 ;; - All functions below accept an optional SESSION-ID as the last argument.
 ;; - When SESSION-ID is nil, the default session is used.
+;; - librimel-search is an exception, it always use a separate sessio to avoid
+;; - interfering with current input
 ;; - Use librimel-create-session to create additional independent sessions.
 ;; - Use librimel-destroy-session to clean up sessions you created.
 ;; - WARNING: Do NOT destroy the default session returned by librimel-start.
 ;;
 ;; Example usage:
-;;   ;; Basic usage (uses default session, not suggested)
+;;
+;;  librimel-search= always uses a separate session to avoid interfering with
+;;  the current input, so now these two have the same effect.
+;;
 ;;   (librimel-search "zhongwen")
 ;;
-;;   ;; Use separate session for search to avoid interfering with current input
 ;;   (let ((search-session (librimel-create-session)))
 ;;     (unwind-protect
 ;;         (librimel-search "zhongwen" nil search-session)
