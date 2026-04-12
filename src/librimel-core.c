@@ -605,6 +605,30 @@ static emacs_value librimel_process_key(emacs_env *env, ptrdiff_t nargs,
   return em_nil;
 }
 
+DOCSTRING(librimel_simulate_key_sequence, "STRING &optional SESSION-ID",
+          "Simulate a key sequence STRING to rime session.\n"
+          "SESSION-ID optionally specifies which session to use.");
+static emacs_value librimel_simulate_key_sequence(emacs_env *env,
+                                                  ptrdiff_t nargs,
+                                                  emacs_value args[],
+                                                  void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
+
+  char *string = em_get_string(env, args[0]);
+  RimeSessionId session_id = _get_session(rime, env, nargs, args, 1);
+
+  if (!_ensure_given_session(rime, session_id)) {
+    em_signal_rimeerr(env, 1, NO_SESSION_ERR);
+    free(string);
+    return em_nil;
+  }
+
+  rime->api->simulate_key_sequence(session_id, string);
+  free(string);
+  return em_t;
+}
+
 DOCSTRING(librimel_get_input, "&optional SESSION-ID",
           "Get rime input.\n"
           "When SESSION-ID is provided, use that session.");
@@ -1238,6 +1262,7 @@ void librimel_init(emacs_env *env) {
 
   // input
   DEFUN("librimel-process-key", librimel_process_key, 1, 3);
+  DEFUN("librimel-simulate-key-sequence", librimel_simulate_key_sequence, 1, 2);
   DEFUN("librimel-commit-composition", librimel_commit_composition, 0, 1);
   DEFUN("librimel-clear-composition", librimel_clear_composition, 0, 1);
   DEFUN("librimel-select-candidate", librimel_select_candidate, 1, 2);
