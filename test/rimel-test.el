@@ -80,7 +80,7 @@
   (defun librimel-get-schema-list ()
     rimel-test--mock-schema-list))
 (unless (fboundp 'librimel-search)
-  (defun librimel-search (_string &optional _limit _session-id)
+  (defun librimel-search (_string &optional _index _limit _session-id)
     rimel-test--mock-search-result))
 (unless (fboundp 'librimel-get-user-config)
   (defun librimel-get-user-config (_config _option &optional _type) nil))

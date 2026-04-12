@@ -99,6 +99,30 @@ static char *_copy_string(char *str) {
   }
 }
 
+/**
+ * Get candidates from a rime session.
+ *
+ * This function iterates through the candidate list starting from the
+ * beginning.
+ *
+ * @param rime The EmacsRime instance.
+ * @param session_id The rime session ID.
+ * @param limit Maximum number of candidates to return. Pass 0 to get all
+ * candidates.
+ *
+ * @return EmacsRimeCandidates containing a linked list of candidates and the
+ * count.
+ *
+ * Usage:
+ *   // Get all candidates
+ *   EmacsRimeCandidates all = _get_candidates(rime, session_id, 0);
+ *
+ *   // Get first 5 candidates
+ *   EmacsRimeCandidates first5 = _get_candidates(rime, session_id, 5);
+ *
+ *   // The returned list must be freed using free_candidate_list()
+ *   free_candidate_list(all.list);
+ */
 EmacsRimeCandidates _get_candidates(EmacsRime *rime, RimeSessionId session_id,
                                     size_t limit) {
   EmacsRimeCandidates c = {
@@ -108,6 +132,69 @@ EmacsRimeCandidates _get_candidates(EmacsRime *rime, RimeSessionId session_id,
   RimeCandidateListIterator iterator = {0};
   CandidateLinkedList *next = c.list;
   if (rime->api->candidate_list_begin(session_id, &iterator)) {
+    while (rime->api->candidate_list_next(&iterator) &&
+           (limit == 0 || c.size < limit)) {
+      c.size += 1;
+
+      next->text = _copy_string(iterator.candidate.text);
+      next->comment = _copy_string(iterator.candidate.comment);
+
+      next->next = (CandidateLinkedList *)malloc(sizeof(CandidateLinkedList));
+
+      next = next->next;
+    }
+    next->next = NULL;
+    rime->api->candidate_list_end(&iterator);
+  }
+
+  return c;
+}
+
+/**
+ * Get candidates from a specific index position in a rime session.
+ *
+ * This function uses candidate_list_from_index() to start iterating from
+ * a given position, which is useful for pagination (e.g., getting candidates
+ * from page 2 onwards).
+ *
+ * @param rime The EmacsRime instance.
+ * @param session_id The rime session ID.
+ * @param index The starting index position (0-based). For example, 5 means
+ *             start from the 6th candidate.
+ * @param limit Maximum number of candidates to return. Pass 0 to get all
+ *              remaining candidates from that position.
+ *
+ * @return EmacsRimeCandidates containing a linked list of candidates and the
+ * count.
+ *
+ * Usage:
+ *   // Get candidates starting from index 5 (6th candidate onwards)
+ *   EmacsRimeCandidates from5 = _get_candidates_from_index(rime, session_id, 5,
+ * 0);
+ *
+ *   // Get 3 candidates starting from index 10
+ *   EmacsRimeCandidates next3 = _get_candidates_from_index(rime, session_id,
+ * 10, 3);
+ *
+ *   // Combined with _get_candidates() for pagination:
+ *   // Page 1: _get_candidates(rime, session_id, page_size)
+ *   // Page 2: _get_candidates_from_index(rime, session_id, page_size,
+ * page_size)
+ *   // etc.
+ *
+ * Note: This requires candidate_list_from_index() to be available in the
+ * librime API.
+ */
+EmacsRimeCandidates _get_candidates_from_index(EmacsRime *rime,
+                                               RimeSessionId session_id,
+                                               int index, size_t limit) {
+  EmacsRimeCandidates c = {
+      .size = 0,
+      .list = (CandidateLinkedList *)malloc(sizeof(CandidateLinkedList))};
+
+  RimeCandidateListIterator iterator = {0};
+  if (rime->api->candidate_list_from_index(session_id, &iterator, index)) {
+    CandidateLinkedList *next = c.list;
     while (rime->api->candidate_list_next(&iterator) &&
            (limit == 0 || c.size < limit)) {
       c.size += 1;
@@ -231,19 +318,42 @@ void free_candidate_list(CandidateLinkedList *list) {
   }
 }
 
-DOCSTRING(librimel_search, "STRING &optional LIMIT SESSION-ID",
-          "Input STRING and return LIMIT number candidates.\n"
-          "When LIMIT is nil, return all candidates.\n"
-          "When SESSION-ID is provided, use that session.");
+/**
+ * Input STRING and return candidates.
+ *
+ * @param string The input string to search.
+ * @param index Optional starting index (0-based). Pass 0 or nil to start from
+ * beginning.
+ * @param limit Maximum number of candidates to return. Pass 0 or nil for all.
+ * @param session_id Optional session ID. If not provided, creates a temporary
+ * session.
+ *
+ * Usage:
+ *   (librimel-search "wo")                    ; all candidates
+ *   (librimel-search "wo" 5)                 ; first 5 candidates
+ *   (librimel-search "wo" 0 5)                ; candidates 0-4 (index 0, limit
+ * 5) (librimel-search "wo" 5 5)                ; candidates 5-9 (index 5, limit
+ * 5) (librimel-search "wo" 10 0)               ; all from index 10 onwards
+ */
+DOCSTRING(librimel_search, "STRING &optional INDEX LIMIT SESSION-ID",
+          "Input STRING and return candidates.\n"
+          "INDEX is the starting position (0-based), default 0.\n"
+          "LIMIT is max candidates to return, default all.\n"
+          "SESSION-ID optionally specifies which session to use.");
 static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
                                    emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
   CHECK_INITIALIZED();
   char *string = em_get_string(env, args[0]);
 
-  size_t limit = 0;
+  int index = 0;
   if (nargs >= 2 && env->is_not_nil(env, args[1])) {
-    limit = env->extract_integer(env, args[1]);
+    index = (int)env->extract_integer(env, args[1]);
+  }
+
+  size_t limit = 0;
+  if (nargs >= 3 && env->is_not_nil(env, args[2])) {
+    limit = env->extract_integer(env, args[2]);
     if (limit == 0) {
       free(string);
       return em_nil;
@@ -253,8 +363,8 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
   RimeSessionId session_id = 0;
   bool should_destroy_session = false;
 
-  if (nargs > 2 && env->is_not_nil(env, args[2])) {
-    session_id = (RimeSessionId)env->extract_integer(env, args[2]);
+  if (nargs > 3 && env->is_not_nil(env, args[3])) {
+    session_id = (RimeSessionId)env->extract_integer(env, args[3]);
     if (!_ensure_given_session(rime, session_id)) {
       em_signal_rimeerr(env, 1, NO_SESSION_ERR);
       free(string);
@@ -274,7 +384,12 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
   rime->api->clear_composition(session_id);
   rime->api->simulate_key_sequence(session_id, string);
 
-  EmacsRimeCandidates candidates = _get_candidates(rime, session_id, limit);
+  EmacsRimeCandidates candidates;
+  if (index > 0) {
+    candidates = _get_candidates_from_index(rime, session_id, index, limit);
+  } else {
+    candidates = _get_candidates(rime, session_id, limit);
+  }
 
   if (candidates.size == 0) {
     free_candidate_list(candidates.list);
@@ -1067,7 +1182,7 @@ void librimel_init(emacs_env *env) {
   DEFUN("librimel-finalize", librimel_finalize, 0, 0);
   DEFUN("librimel-create-session", librimel_create_session, 0, 0);
   DEFUN("librimel-destroy-session", librimel_destroy_session, 1, 1);
-  DEFUN("librimel-search", librimel_search, 1, 3);
+  DEFUN("librimel-search", librimel_search, 1, 4);
   DEFUN("librimel--select-schema", librimel_select_schema, 1, 2);
   DEFUN("librimel-get-schema-list", librimel_get_schema_list, 0, 0);
 

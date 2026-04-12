@@ -192,7 +192,7 @@ Creates a temporary user data directory."
 (ert-deftest librimel-test-search-with-limit ()
   "Search with limit should return at most LIMIT candidates."
   (librimel-test--skip-unless-rime)
-  (let ((results (librimel-search "wo" 3)))
+  (let ((results (librimel-search "wo" 0 3)))
     (when results
       (should (<= (length results) 3)))))
 
@@ -201,7 +201,7 @@ Creates a temporary user data directory."
   (librimel-test--skip-unless-rime)
   (let ((sid (librimel-create-session)))
     (unwind-protect
-        (let ((results (librimel-search "ni" 5 sid)))
+        (let ((results (librimel-search "ni" 0 5 sid)))
           (when results
             (should (listp results))
             (should (stringp (car results)))))
@@ -213,6 +213,37 @@ Creates a temporary user data directory."
   (let ((results (librimel-search "zzzzzz" 5)))
     ;; May or may not return results depending on schema
     (should (or (null results) (listp results)))))
+
+(ert-deftest librimel-test-search-from-index-basic ()
+  "Search with index should return candidates starting from INDEX."
+  (librimel-test--skip-unless-rime)
+  (let* ((all (librimel-search "wo" 0 10))
+         (from5 (librimel-search "wo" 5 5)))
+    (should (listp from5))
+    (should (<= (length from5) 5))
+    (when (and (>= (length all) 10) (>= (length from5) 1))
+      (should (not (string= (car all) (car from5)))))))
+
+(ert-deftest librimel-test-search-from-index-with-session ()
+  "Search with explicit session should work."
+  (librimel-test--skip-unless-rime)
+  (let ((sid (librimel-create-session)))
+    (unwind-protect
+      (let ((results (librimel-search "ni" 2 3 sid)))
+        (should results)
+        (should (listp results))
+        (should (stringp (car results))))
+      (librimel-destroy-session sid))))
+
+(ert-deftest librimel-test-search-pagination ()
+  "Combined search calls should support pagination."
+  (librimel-test--skip-unless-rime)
+  (let* ((page-size 5)
+         (page1 (librimel-search "wo" 0 page-size))
+         (page2 (librimel-search "wo" page-size page-size)))
+    (should (listp page1))
+    (should (listp page2))
+    (should (not (string= (car page1) (car page2))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Commit tests

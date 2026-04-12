@@ -59,15 +59,20 @@ When it is nil, librime will auto search module in many path."
 ;;
 ;; Example usage:
 ;;
-;;  librimel-search= always uses a separate session to avoid interfering with
-;;  the current input, so now these two have the same effect.
+;;  librimel-search uses a separate session to avoid interfering with
+;;  the current input.
 ;;
-;;   (librimel-search "zhongwen")
+;;   (librimel-search "zhongwen")                  ; all candidates
+;;   (librimel-search "zhongwen" 5)                ; first 5 candidates
+;;   (librimel-search "zhongwen" 0 5)               ; candidates 0-4
+;;   (librimel-search "zhongwen" 5 5)               ; candidates 5-9 (pagination)
+;;   (librimel-search "zhongwen" 10 0)              ; all from index 10 onwards
 ;;
-;;   (let ((search-session (librimel-create-session)))
-;;     (unwind-protect
-;;         (librimel-search "zhongwen" nil search-session)
-;;       (librimel-destroy-session search-session)))
+;;  librimel-search as pagination:
+;;   (let ((page-size 5))
+;;     (list (librimel-search "wo" 0 page-size)       ; page 1
+;;           (librimel-search "wo" page-size page-size)   ; page 2
+;;           (librimel-search "wo" (* 2 page-size) page-size))) ; page 3
 ;; ============================================================================
 ;; C function declarations for the byte-compiler.
 ;; use C-h f to see the args and documents of these fucnctions.
