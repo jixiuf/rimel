@@ -84,6 +84,8 @@ When it is nil, librime will auto search module in many path."
 (declare-function librimel-get-candidates "ext:src/librimel-core.c")
 (declare-function librimel-process-key "ext:src/librimel-core.c")
 (declare-function librimel-simulate-key-sequence "ext:src/librimel-core.c")
+(declare-function librimel-event-to-key-sequence "ext:src/librimel-core.c")
+(declare-function librimel-process-event "ext:src/librimel-core.c")
 (declare-function librimel-get-input "ext:src/librimel-core.c")
 (declare-function librimel-get-context "ext:src/librimel-core.c")
 (declare-function librimel-get-status "ext:src/librimel-core.c")
@@ -188,8 +190,8 @@ if NAMES is nil, \"rime-data\" as fallback."
                             (or (locate-library "files") "/usr")))
                      (include-dir (concat (file-name-as-directory path) "include/")))
                 (if (file-exists-p (concat include-dir "emacs-module.h"))
-                    (concat "CFLAGS = -fPIC -O2 -Wall -I " include-dir "\n")
-                  (concat "CFLAGS = -fPIC -O2 -Wall -I emacs-module/" (number-to-string emacs-major-version) "\n")))
+                    (concat "CFLAGS = -fPIC -O2 -Wall -DHAVE_RIME_API -I " include-dir "\n")
+                  (concat "CFLAGS = -fPIC -O2 -Wall -DHAVE_RIME_API -I emacs-module/" (number-to-string emacs-major-version) "\n")))
               (let ((p (getenv "RIME_PATH")))
                 (if p
                     (concat "CFLAGS += -I " p "/src/\n"
@@ -304,6 +306,76 @@ SESSION-ID optionally specifies which session to use (nil = default)."
     (unless succ
       (message "librimel: failed to select schema: %S" schema_id))
     succ))
+
+(defun librimel-kbd-to-key-sequence (keys)
+  "Convert Emacs key sequence KEYS to librime key sequence string.
+
+KEYS is a key sequence (vector or string) as returned by `kbd`, or a
+plain string whose characters are treated as individual key events.
+Each event is converted via `librimel-event-to-key-sequence` and the
+results are concatenated.
+
+See also `librimel-simulate-key-sequence'.
+
+The output format follows librime's `KeySequence::Parse` convention
+(see librime/src/rime/key_event.cc):
+  - Plain printable ASCII (except `{` and `}`): output directly,
+    e.g. \"a\", \"1\"
+  - Named keys (Left, Return, F1, etc.): wrapped in braces,
+    e.g. \"{Left}\", \"{F1}\"
+  - Keys with modifiers: \"{Control+a}\", \"{Control+Left}\",
+    \"{Meta+F1}\"
+  - Braces `{` and `}` always use names: \"{braceleft}\",
+    \"{braceright}\"
+
+Examples:
+  (librimel-kbd-to-key-sequence (kbd \"a\"))       => \"a\"
+  (librimel-kbd-to-key-sequence (kbd \"C-a\"))     => \"{Control+a}\"
+  (librimel-kbd-to-key-sequence (kbd \"C-M-a\"))   => \"{Control+Meta+a}\"
+  (librimel-kbd-to-key-sequence (kbd \"<left>\"))  => \"{Left}\"
+  (librimel-kbd-to-key-sequence (kbd \"C-<left>\")) => \"{Control+Left}\"
+  (librimel-kbd-to-key-sequence (kbd \"C-<f1>\"))  => \"{Control+F1}\"
+  (librimel-kbd-to-key-sequence (kbd \"{\") )      => \"{braceleft}\"
+  (librimel-kbd-to-key-sequence (kbd \"C-M-<left>\"))
+    => \"{Control+Meta+Left}\"
+
+Multiple keys in a sequence are concatenated:
+  (librimel-kbd-to-key-sequence \"abc\")            => \"abc\"
+  (librimel-kbd-to-key-sequence (kbd \"C-a C-b\"))
+    => \"{Control+a}{Control+b}\""
+  (let ((sequences "")
+        sequence)
+    (dolist (event (listify-key-sequence keys))
+      (setq sequence (librimel-event-to-key-sequence event))
+      (setq sequences (concat sequences sequence)))
+    sequences))
+
+(defun librimel-process-keys (keys)
+  "Process a sequence of KEYS by sending each event to librime.
+
+KEYS is a key sequence (vector or string) as returned by `kbd`, or a
+plain string whose characters are treated as individual key events.
+Each event is converted via `librimel-process-event` and sent to
+librime in order.
+
+This is the main entry point for feeding keystrokes to librime,
+typically used in input method event handlers.
+
+Examples:
+  ;; Single keystroke
+  (librimel-process-keys \"a\")
+
+  ;; Multiple keystrokes
+  (librimel-process-keys \"zhongwen\")
+
+  ;; Control/meta combinations
+  (librimel-process-keys (kbd \"C-<return>\"))
+  (librimel-process-keys (kbd \"C-<SPC>\"))
+
+  ;; Function keys
+  (librimel-process-keys (kbd \"<f1>\"))"
+  (dolist (event (listify-key-sequence keys))
+    (librimel-process-event event)))
 
 (defun librimel--finalize-on-exit ()
   "Finalize librime when Emacs is about to exit."

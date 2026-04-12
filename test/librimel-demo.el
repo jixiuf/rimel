@@ -21,7 +21,8 @@
 
 (try-context)
 
-
+(librimel-event-to-key-sequence ?a)
+(librimel-event-to-key-sequence (kbd "C-a"))
 
 (provide 'librimel-demo)
 

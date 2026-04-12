@@ -19,6 +19,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Include key_table functions for testing */
+#include "../src/key_table.h"
+
+/* Link key_table implementation */
+#include "../src/key_table.c"
+
 /* ---------------------------------------------------------------------------
  * Re-implement the internal helpers under test (they are static in
  * librimel-core.c, so we copy them here for isolated testing).
@@ -190,6 +196,192 @@ TEST(free_candidate_list_multiple) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Emacs event to key sequence tests
+ * ---------------------------------------------------------------------------*/
+
+TEST(emacs_event_keycode_basic) {
+  ASSERT(emacs_event_keycode('a') == 'a');
+  ASSERT(emacs_event_keycode(32) == 32);
+  ASSERT(emacs_event_keycode(65) == 65);
+}
+
+TEST(emacs_event_has_modifier) {
+  ASSERT(emacs_event_has_modifier('a') == 0);
+  ASSERT(emacs_event_has_modifier('a' + EMACS_CHAR_CTL) != 0);
+  ASSERT(emacs_event_has_modifier('a' + EMACS_CHAR_META) != 0);
+  ASSERT(emacs_event_has_modifier('a' + EMACS_CHAR_SHIFT) != 0);
+}
+
+TEST(emacs_int_event_lowercase) {
+  char buf[256];
+  ASSERT(emacs_int_event_to_key_sequence('a', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "a");
+}
+
+TEST(emacs_int_event_uppercase) {
+  char buf[256];
+  ASSERT(emacs_int_event_to_key_sequence('A', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "A");
+}
+
+TEST(emacs_int_event_control) {
+  char buf[256];
+  /* Emacs (read-event) returns 1 for C-a (ASCII 0x01), not ('a' + EMACS_CHAR_CTL) */
+  int c_a = 1;
+  ASSERT(emacs_int_event_to_key_sequence(c_a, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+a}");
+}
+
+TEST(emacs_int_event_meta) {
+  char buf[256];
+  int m_a = 'a' + EMACS_CHAR_META;
+  ASSERT(emacs_int_event_to_key_sequence(m_a, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Meta+a}");
+}
+
+TEST(emacs_int_event_shift) {
+  char buf[256];
+  int s_a = 'a' + EMACS_CHAR_SHIFT;
+  ASSERT(emacs_int_event_to_key_sequence(s_a, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Shift+a}");
+}
+
+TEST(emacs_int_event_control_meta) {
+  char buf[256];
+  /* C-M-a: keycode is 1 (C-a) with Meta modifier */
+  int c_m_a = 1 + EMACS_CHAR_META;
+  ASSERT(emacs_int_event_to_key_sequence(c_m_a, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+Meta+a}");
+}
+
+TEST(emacs_int_event_multiple_modifiers) {
+  char buf[256];
+  int c_m_s_a = 1 + EMACS_CHAR_CTL + EMACS_CHAR_META + EMACS_CHAR_SHIFT;
+  ASSERT(emacs_int_event_to_key_sequence(c_m_s_a, buf, sizeof(buf)) == 0);
+  ASSERT(strstr(buf, "Control") != NULL);
+  ASSERT(strstr(buf, "Shift") != NULL);
+  ASSERT(strstr(buf, "Meta") != NULL);
+  ASSERT(strstr(buf, "a") != NULL);
+}
+
+TEST(emacs_int_event_punctuation) {
+  char buf[256];
+  /* Punctuation chars without modifiers output directly */
+  ASSERT(emacs_int_event_to_key_sequence(',', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, ",");
+  ASSERT(emacs_int_event_to_key_sequence('.', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, ".");
+  ASSERT(emacs_int_event_to_key_sequence('!', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "!");
+  ASSERT(emacs_int_event_to_key_sequence('[', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "[");
+  ASSERT(emacs_int_event_to_key_sequence(';', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, ";");
+}
+
+TEST(emacs_int_event_comma_with_control) {
+  char buf[256];
+  /* C-, has Control modifier, uses braces */
+  int c_comma = ',' + EMACS_CHAR_CTL;
+  ASSERT(emacs_int_event_to_key_sequence(c_comma, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+comma}");
+}
+
+TEST(emacs_int_event_space) {
+  char buf[256];
+  ASSERT(emacs_int_event_to_key_sequence(' ', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, " ");
+}
+
+TEST(emacs_int_event_braces) {
+  char buf[256];
+  /* Braces must always use names to avoid KeySequence::Parse ambiguity */
+  ASSERT(emacs_int_event_to_key_sequence('{', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{braceleft}");
+  ASSERT(emacs_int_event_to_key_sequence('}', buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{braceright}");
+  int c_lbrace = '{' + EMACS_CHAR_CTL;
+  ASSERT(emacs_int_event_to_key_sequence(c_lbrace, buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+braceleft}");
+}
+
+TEST(emacs_int_event_modifiers_with_named_key) {
+  char buf[256];
+  /* Test modifier + named key combinations */
+  int c_left = 0xff51 + EMACS_CHAR_CTL;  /* XK_Left + Control */
+  ASSERT(emacs_int_event_to_key_sequence(c_left, buf, sizeof(buf)) == 0);
+  ASSERT(strstr(buf, "Control") != NULL);
+  ASSERT(strstr(buf, "Left") != NULL);
+
+  int m_f1 = 0xffbe + EMACS_CHAR_META;  /* XK_F1 + Meta */
+  ASSERT(emacs_int_event_to_key_sequence(m_f1, buf, sizeof(buf)) == 0);
+  ASSERT(strstr(buf, "Meta") != NULL);
+  ASSERT(strstr(buf, "F1") != NULL);
+
+  int c_semi = ';' + EMACS_CHAR_CTL;
+  ASSERT(emacs_int_event_to_key_sequence(c_semi, buf, sizeof(buf)) == 0);
+  ASSERT(strstr(buf, "Control") != NULL);
+  ASSERT(strstr(buf, "semicolon") != NULL);
+}
+
+TEST(emacs_symbol_lowercase) {
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence("left", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Left}");
+}
+
+TEST(emacs_symbol_capitalized) {
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence("Return", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Return}");
+}
+
+TEST(emacs_symbol_with_modifiers) {
+  char buf[256];
+  /* Test modifier prefixes in symbol names */
+  ASSERT(emacs_symbol_to_key_sequence("C-left", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+Left}");
+
+  ASSERT(emacs_symbol_to_key_sequence("M-f1", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Meta+F1}");
+
+  ASSERT(emacs_symbol_to_key_sequence("C-M-left", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+Meta+Left}");
+
+  ASSERT(emacs_symbol_to_key_sequence("C-return", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Control+Return}");
+
+  ASSERT(emacs_symbol_to_key_sequence("s-a", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{Super+a}");
+}
+
+TEST(emacs_symbol_space) {
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence("space", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{space}");
+}
+
+TEST(emacs_symbol_comma) {
+  /* "comma" is not a symbol Emacs returns; this tests the name lookup */
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence("comma", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{comma}");
+}
+
+TEST(emacs_symbol_unknown) {
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence("unknown_key_xyz", buf, sizeof(buf)) == 0);
+  ASSERT_STR_EQ(buf, "{unknown_key_xyz}");
+}
+
+TEST(emacs_symbol_null_input) {
+  char buf[256];
+  ASSERT(emacs_symbol_to_key_sequence(NULL, buf, sizeof(buf)) == -1);
+  ASSERT(emacs_symbol_to_key_sequence("left", NULL, sizeof(buf)) == -1);
+  ASSERT(emacs_symbol_to_key_sequence("left", buf, 0) == -1);
+}
+
+/* ---------------------------------------------------------------------------
  * Main
  * ---------------------------------------------------------------------------*/
 
@@ -208,6 +400,28 @@ int main(void) {
   run_test_free_candidate_list_empty();
   run_test_free_candidate_list_single();
   run_test_free_candidate_list_multiple();
+
+  /* emacs event to key sequence tests */
+  run_test_emacs_event_keycode_basic();
+  run_test_emacs_event_has_modifier();
+  run_test_emacs_int_event_lowercase();
+  run_test_emacs_int_event_uppercase();
+  run_test_emacs_int_event_control();
+  run_test_emacs_int_event_meta();
+  run_test_emacs_int_event_shift();
+  run_test_emacs_int_event_control_meta();
+  run_test_emacs_int_event_multiple_modifiers();
+  run_test_emacs_int_event_punctuation();
+  run_test_emacs_int_event_comma_with_control();
+  run_test_emacs_int_event_space();
+  run_test_emacs_int_event_modifiers_with_named_key();
+  run_test_emacs_symbol_lowercase();
+  run_test_emacs_symbol_capitalized();
+  run_test_emacs_symbol_with_modifiers();
+  run_test_emacs_symbol_space();
+  run_test_emacs_symbol_comma();
+  run_test_emacs_symbol_unknown();
+  run_test_emacs_symbol_null_input();
 
   printf("\n%d tests run, %d passed, %d failed.\n", tests_run, tests_passed,
          tests_failed);

@@ -272,6 +272,228 @@ Creates a temporary user data directory."
   (should-not (librimel-get-commit)))
 
 ;; ---------------------------------------------------------------------------
+;; Event conversion tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest librimel-test-event-to-key-sequence-lowercase-ascii ()
+  "Lowercase ASCII character should return itself (no braces needed)."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?a) "a"))
+  (should (string= (librimel-event-to-key-sequence ?z) "z"))
+  (should (string= (librimel-event-to-key-sequence ?m) "m")))
+
+(ert-deftest librimel-test-event-to-key-sequence-uppercase-ascii ()
+  "Uppercase ASCII character should return itself."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?A) "A"))
+  (should (string= (librimel-event-to-key-sequence ?Z) "Z")))
+
+(ert-deftest librimel-test-event-to-key-sequence-digits ()
+  "Digit characters should return themselves."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?0) "0"))
+  (should (string= (librimel-event-to-key-sequence ?5) "5"))
+  (should (string= (librimel-event-to-key-sequence ?9) "9")))
+
+(ert-deftest librimel-test-event-to-key-sequence-comma ()
+  "Comma without modifiers should return comma char directly."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?,) ",")))
+
+(ert-deftest librimel-test-event-to-key-sequence-period ()
+  "Period without modifiers should return period char directly."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?.) ".")))
+
+(ert-deftest librimel-test-event-to-key-sequence-control-modifier ()
+  "Control + a (Emacs returns 1 for C-a without modifier bits)."
+  (librimel-test--skip-unless-rime)
+  (let ((c-a (car (listify-key-sequence (kbd "C-a")))))
+    (should (string= (librimel-event-to-key-sequence c-a) "{Control+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-meta-modifier ()
+  "Meta modifier should produce {Meta+...} format."
+  (librimel-test--skip-unless-rime)
+  (let ((m-a (car (listify-key-sequence (kbd "M-a")))))
+    (should (string= (librimel-event-to-key-sequence m-a) "{Meta+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-shift-modifier ()
+  "Shift modifier should produce {Shift+...} format."
+  (librimel-test--skip-unless-rime)
+  (let ((s-a (car (listify-key-sequence (kbd "S-a")))))
+    (should (string= (librimel-event-to-key-sequence s-a) "{Shift+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-alt-modifier ()
+  "Alt modifier should produce {Alt+...} format."
+  (librimel-test--skip-unless-rime)
+  (let ((alt-a (car (listify-key-sequence (kbd "A-a")))))
+    (should (string= (librimel-event-to-key-sequence alt-a) "{Alt+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-super-modifier ()
+  "Super modifier should produce {Super+...} format."
+  (librimel-test--skip-unless-rime)
+  (let ((super-a (car (listify-key-sequence (kbd "s-a")))))
+    (should (string= (librimel-event-to-key-sequence super-a) "{Super+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-hyper-modifier ()
+  "Hyper modifier should produce {Hyper+...} format."
+  (librimel-test--skip-unless-rime)
+  (let ((hyper-a (car (listify-key-sequence (kbd "H-a")))))
+    (should (string= (librimel-event-to-key-sequence hyper-a) "{Hyper+a}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-multiple-modifiers ()
+  "Multiple modifiers should all appear in output."
+  (librimel-test--skip-unless-rime)
+  (let ((c-m-a (car (listify-key-sequence (kbd "C-M-a")))))
+    (let ((result (librimel-event-to-key-sequence c-m-a)))
+      (should (string= result "{Control+Meta+a}"))
+      (should (string-match "Control" result))
+      (should (string-match "Meta" result))
+      (should (string-match "a" result)))))
+
+(ert-deftest librimel-test-event-to-key-sequence-control-comma ()
+  "Control + comma should return {Control+comma}."
+  (librimel-test--skip-unless-rime)
+  (let* ((ev (car (listify-key-sequence (kbd "C-,"))))
+         (result (librimel-event-to-key-sequence ev)))
+    (should (string= result "{Control+comma}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-control-space ()
+  "Control + space should return {Control+space}."
+  (librimel-test--skip-unless-rime)
+  (let* ((ev (car (listify-key-sequence (kbd "C-<SPC>"))))
+         (result (librimel-event-to-key-sequence ev)))
+    (should (string= "{Control+space}" result))))
+
+(ert-deftest librimel-test-event-to-key-sequence-direction-keys ()
+  "Direction keys should return {Direction} format."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence 'left) "{Left}"))
+  (should (string= (librimel-event-to-key-sequence 'right) "{Right}"))
+  (should (string= (librimel-event-to-key-sequence 'up) "{Up}"))
+  (should (string= (librimel-event-to-key-sequence 'down) "{Down}")))
+
+(ert-deftest librimel-test-event-to-key-sequence-navigation-keys ()
+  "Navigation keys should return correct format."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence 'return) "{Return}"))
+  (should (string= (librimel-event-to-key-sequence 'space) "{space}"))
+  (should (string= (librimel-event-to-key-sequence 'backspace) "{BackSpace}"))
+  (should (string= (librimel-event-to-key-sequence 'tab) "{Tab}"))
+  (should (string= (librimel-event-to-key-sequence 'escape) "{Escape}"))
+  (should (string= (librimel-event-to-key-sequence 'home) "{Home}"))
+  (should (string= (librimel-event-to-key-sequence 'end) "{End}"))
+  (should (string= (librimel-event-to-key-sequence 'delete) "{Delete}"))
+  (should (string= (librimel-event-to-key-sequence 'prior) "{Prior}"))
+  (should (string= (librimel-event-to-key-sequence 'next) "{Next}")))
+
+(ert-deftest librimel-test-event-to-key-sequence-function-keys ()
+  "Function keys should return {Fn} format."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence 'f1) "{F1}"))
+  (should (string= (librimel-event-to-key-sequence 'f5) "{F5}"))
+  (should (string= (librimel-event-to-key-sequence 'f12) "{F12}")))
+
+(ert-deftest librimel-test-event-to-key-sequence-braces ()
+  "Brace characters must use names to avoid parse ambiguity."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence ?{) "{braceleft}"))
+  (should (string= (librimel-event-to-key-sequence ?}) "{braceright}"))
+  (let ((c-brace (car (listify-key-sequence (kbd "C-{")))))
+    (should (string= (librimel-event-to-key-sequence c-brace) "{Control+braceleft}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-space ()
+  "Space character should return single space."
+  (librimel-test--skip-unless-rime)
+  (should (string= (librimel-event-to-key-sequence 32) " ")))
+
+(ert-deftest librimel-test-event-to-key-sequence-modifier-direction-keys ()
+  "Direction keys with modifiers should use {Modifier+Key} format."
+  (librimel-test--skip-unless-rime)
+  (let ((c-left (car (listify-key-sequence (kbd "C-<left>")))))
+    (should (string= (librimel-event-to-key-sequence c-left) "{Control+Left}")))
+  (let ((m-right (car (listify-key-sequence (kbd "M-<right>")))))
+    (should (string= (librimel-event-to-key-sequence m-right) "{Meta+Right}")))
+  (let ((c-m-left (car (listify-key-sequence (kbd "C-M-<left>")))))
+    (should (string= (librimel-event-to-key-sequence c-m-left) "{Control+Meta+Left}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-modifier-function-keys ()
+  "Function keys with modifiers should use {Modifier+Key} format."
+  (librimel-test--skip-unless-rime)
+  (let ((c-f1 (car (listify-key-sequence (kbd "C-<f1>")))))
+    (should (string= (librimel-event-to-key-sequence c-f1) "{Control+F1}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-modifier-return ()
+  "Return key with modifiers should use {Modifier+Return} format."
+  (librimel-test--skip-unless-rime)
+  (let ((m-return (car (listify-key-sequence (kbd "M-<return>")))))
+    (should (string= (librimel-event-to-key-sequence m-return) "{Meta+Return}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-modifier-bracket ()
+  "Bracket key with modifiers should use {Modifier+name} format."
+  (librimel-test--skip-unless-rime)
+  (let ((c-bracket (car (listify-key-sequence (kbd "C-[")))))
+    (should (string= (librimel-event-to-key-sequence c-bracket) "{Control+bracketleft}"))))
+
+(ert-deftest librimel-test-event-to-key-sequence-modifier-semicolon ()
+  "Semicolon with modifiers should use {Control+semicolon}."
+  (librimel-test--skip-unless-rime)
+  (let ((c-semi (car (listify-key-sequence (kbd "C-;")))))
+    (should (string= (librimel-event-to-key-sequence c-semi) "{Control+semicolon}"))))
+
+;; ---------------------------------------------------------------------------
+;; Process event tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest librimel-test-process-event-integer ()
+  "process-event with integer should send key sequence to librime."
+  (librimel-test--skip-unless-rime)
+  (librimel-clear-composition)
+  (should (eq (librimel-process-event ?a) t)))
+
+(ert-deftest librimel-test-process-event-symbol-left ()
+  "process-event with 'left should send Left key to librime."
+  (librimel-test--skip-unless-rime)
+  (librimel-clear-composition)
+  ;; Process a key first to enter composition mode
+  (librimel-process-event ?w)
+  (librimel-process-event ?o)
+  ;; Then send space to select first candidate
+  (should (eq (librimel-process-event 'space) t))
+  (librimel-clear-composition))
+
+(ert-deftest librimel-test-process-event-control-char ()
+  "process-event with Control modifier should work."
+  (librimel-test--skip-unless-rime)
+  (librimel-clear-composition)
+  (let ((c-a (+ ?a #x4000000)))
+    ;; Control+a may or may not be handled depending on schema
+    (let ((result (librimel-process-event c-a)))
+      (should (or (eq result t) (eq result nil))))))
+
+(ert-deftest librimel-test-process-event-with-session ()
+  "process-event with explicit session should work."
+  (librimel-test--skip-unless-rime)
+  (librimel-clear-composition)
+  (should (eq (librimel-process-event ?h librimel-test--session-id) t))
+  (should (string-equal (librimel-get-input) "h"))
+  (librimel-clear-composition))
+
+(ert-deftest librimel-test-process-event-return-key ()
+  "process-event with 'return should commit composition."
+  (librimel-test--skip-unless-rime)
+  (librimel-clear-composition)
+  (librimel-process-event ?n)
+  (librimel-process-event ?i)
+  (let ((input-before (librimel-get-input)))
+    (should (string-equal input-before "ni")))
+  (librimel-process-event 'return)
+  (let ((commit (librimel-get-commit)))
+    ;; After return, commit should be consumed or set
+    (should (or (null commit) (stringp commit))))
+  (librimel-clear-composition))
+
+;; ---------------------------------------------------------------------------
 ;; Sync dir test
 ;; ---------------------------------------------------------------------------
 

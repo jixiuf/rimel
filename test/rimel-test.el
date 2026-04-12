@@ -94,6 +94,11 @@
   (defun librimel-get-sync-dir () "/tmp/rime-sync"))
 (unless (fboundp 'librimel-sync-user-data)
   (defun librimel-sync-user-data () t))
+(unless (fboundp 'librimel-simulate-key-sequence)
+  (defun librimel-simulate-key-sequence (string &optional _session-id)
+    "Mock simulate-key-sequence that records the key sequence."
+    (push string rimel-test--processed-keys)
+    t))
 
 ;; Now load our packages (they will find the stubs)
 (require 'librimel)

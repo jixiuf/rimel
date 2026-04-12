@@ -24,7 +24,7 @@ SRC = src
 SOURCES = $(wildcard $(SRC)/*.c)
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 TARGET = $(SRC)/librimel-core$(SUFFIX)
-CFLAGS += -fPIC -O2 -Wall
+CFLAGS += -fPIC -O2 -Wall -DHAVE_RIME_API
 
 ifndef EMACS_MAJOR_VERSION
 	EMACS_MAJOR_VERSION := $(shell emacs --batch --eval '(princ emacs-major-version)' 2>/dev/null || echo 26)
