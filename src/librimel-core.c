@@ -335,6 +335,34 @@ void free_candidate_list(CandidateLinkedList *list) {
  * 5) (librimel-search "wo" 5 5)                ; candidates 5-9 (index 5, limit
  * 5) (librimel-search "wo" 10 0)               ; all from index 10 onwards
  */
+/**
+ * Build emacs list from candidates.
+ */
+static emacs_value _build_candidate_list(emacs_env *env,
+                                         EmacsRimeCandidates candidates) {
+  if (candidates.size == 0) {
+    return em_nil;
+  }
+
+  emacs_value *array = malloc(sizeof(emacs_value) * candidates.size);
+  CandidateLinkedList *next = candidates.list;
+  int i = 0;
+  while (next && i < candidates.size) {
+    emacs_value value = env->make_string(env, next->text, strlen(next->text));
+    if (next->comment) {
+      emacs_value comment =
+          env->make_string(env, next->comment, strlen(next->comment));
+      value = em_propertize(env, value, ":comment", comment);
+    }
+    array[i++] = value;
+    next = next->next;
+  }
+
+  emacs_value result = em_list(env, candidates.size, array);
+  free(array);
+  return result;
+}
+
 DOCSTRING(librimel_search, "STRING &optional INDEX LIMIT SESSION-ID",
           "Input STRING and return candidates.\n"
           "INDEX is the starting position (0-based), default 0.\n"
@@ -391,39 +419,60 @@ static emacs_value librimel_search(emacs_env *env, ptrdiff_t nargs,
     candidates = _get_candidates(rime, session_id, limit);
   }
 
-  if (candidates.size == 0) {
-    free_candidate_list(candidates.list);
-    if (should_destroy_session) {
-      rime->api->destroy_session(session_id);
-    }
-    free(string);
-    return em_nil;
-  }
-
-  emacs_value *array = malloc(sizeof(emacs_value) * candidates.size);
-
-  CandidateLinkedList *next = candidates.list;
-  int i = 0;
-  while (next && i < candidates.size) {
-    emacs_value value = env->make_string(env, next->text, strlen(next->text));
-    if (next->comment) {
-      emacs_value comment =
-          env->make_string(env, next->comment, strlen(next->comment));
-      value = em_propertize(env, value, ":comment", comment);
-    }
-    array[i++] = value;
-    next = next->next;
-  }
-
-  emacs_value result = em_list(env, candidates.size, array);
-
+  emacs_value result = _build_candidate_list(env, candidates);
   free_candidate_list(candidates.list);
-  free(array);
-  free(string);
 
+  free(string);
   if (should_destroy_session) {
     rime->api->destroy_session(session_id);
   }
+
+  return result;
+}
+
+DOCSTRING(
+    librimel_get_candidates, "&optional INDEX LIMIT SESSION-ID",
+    "Get current candidates from a session.\n"
+    "INDEX is the starting position (0-based), default 0.\n"
+    "LIMIT is max candidates to return, default all.\n"
+    "SESSION-ID optionally specifies which session to use (default session if "
+    "nil).\n"
+    "Unlike librimel-search, this does NOT clear composition or simulate key "
+    "sequence.");
+static emacs_value librimel_get_candidates(emacs_env *env, ptrdiff_t nargs,
+                                           emacs_value args[], void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+  CHECK_INITIALIZED();
+
+  int index = 0;
+  if (nargs >= 1 && env->is_not_nil(env, args[0])) {
+    index = (int)env->extract_integer(env, args[0]);
+  }
+
+  size_t limit = 0;
+  if (nargs >= 2 && env->is_not_nil(env, args[1])) {
+    limit = env->extract_integer(env, args[1]);
+    if (limit == 0) {
+      return em_nil;
+    }
+  }
+
+  RimeSessionId session_id = _get_session(rime, env, nargs, args, 2);
+
+  if (!_ensure_given_session(rime, session_id)) {
+    em_signal_rimeerr(env, 1, NO_SESSION_ERR);
+    return em_nil;
+  }
+
+  EmacsRimeCandidates candidates;
+  if (index > 0) {
+    candidates = _get_candidates_from_index(rime, session_id, index, limit);
+  } else {
+    candidates = _get_candidates(rime, session_id, limit);
+  }
+
+  emacs_value result = _build_candidate_list(env, candidates);
+  free_candidate_list(candidates.list);
 
   return result;
 }
@@ -1183,6 +1232,7 @@ void librimel_init(emacs_env *env) {
   DEFUN("librimel-create-session", librimel_create_session, 0, 0);
   DEFUN("librimel-destroy-session", librimel_destroy_session, 1, 1);
   DEFUN("librimel-search", librimel_search, 1, 4);
+  DEFUN("librimel-get-candidates", librimel_get_candidates, 0, 3);
   DEFUN("librimel--select-schema", librimel_select_schema, 1, 2);
   DEFUN("librimel-get-schema-list", librimel_get_schema_list, 0, 0);
 

@@ -13,6 +13,9 @@
   (librimel-clear-composition)
   (librimel-process-key (string-to-char "w"))
   (librimel-process-key (string-to-char "o"))
+  (librimel-process-key #xff54)         ;down
+  (librimel-get-candidates)
+  (librimel-get-candidates 1 3)
   (librimel-get-context))
 
 (try-context)

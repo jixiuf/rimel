@@ -81,6 +81,7 @@ When it is nil, librime will auto search module in many path."
 (declare-function librimel-create-session "ext:src/librimel-core.c")
 (declare-function librimel-destroy-session "ext:src/librimel-core.c")
 (declare-function librimel-search "ext:src/librimel-core.c")
+(declare-function librimel-get-candidates "ext:src/librimel-core.c")
 (declare-function librimel-process-key "ext:src/librimel-core.c")
 (declare-function librimel-get-input "ext:src/librimel-core.c")
 (declare-function librimel-get-context "ext:src/librimel-core.c")
