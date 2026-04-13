@@ -176,13 +176,25 @@ jobs:
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded artifacts
+        run: |
+          find artifacts/ -type f | sort
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          # Copy tar.gz files directly, skip zip files from Windows builds
+          find artifacts/ -name "*.tar.gz" -exec cp {} release-files/ \;
+          # For zip files from Windows builds, keep them as-is
+          find artifacts/ -name "*.zip" -exec cp {} release-files/ \;
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            **/*.zip
-            **/*.tar.gz
+          files: release-files/*
           draft: false
           generate_release_notes: true
         env:
