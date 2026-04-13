@@ -37,6 +37,8 @@
   "Value returned by the mocked `librimel-process-key'.")
 (defvar rimel-test--mock-search-result nil
   "Value returned by the mocked `librimel-search'.")
+(defvar rimel-test--mock-candidates nil
+  "Value returned by the mocked `librimel-get-candidates'.")
 (defvar rimel-test--processed-keys nil
   "List of keys passed to mocked `librimel-process-key', in reverse order.")
 (defvar rimel-test--session-counter 1000
@@ -82,6 +84,9 @@
 (unless (fboundp 'librimel-search)
   (defun librimel-search (_string &optional _index _limit _session-id)
     rimel-test--mock-search-result))
+(unless (fboundp 'librimel-get-candidates)
+  (defun librimel-get-candidates (&optional _index _limit _session-id)
+    rimel-test--mock-candidates))
 (unless (fboundp 'librimel-get-user-config)
   (defun librimel-get-user-config (_config _option &optional _type) nil))
 (unless (fboundp 'librimel-set-user-config)
@@ -116,6 +121,7 @@
         rimel-test--mock-schema-list nil
         rimel-test--mock-process-key-result t
         rimel-test--mock-search-result nil
+        rimel-test--mock-candidates nil
         rimel-test--processed-keys nil
         rimel-test--session-counter 1000))
 
@@ -225,15 +231,30 @@
       (should (string-match "(2)" result)))))
 
 (ert-deftest rimel-test-format-candidates-highlight-first ()
-  "When rimel-highlight-first is non-nil, rotate candidates."
+  "When rimel-highlight-first is non-nil, fetch candidates from highlighted position."
+  (let ((rimel-select-label-keys '(?1 ?2 ?3 ?4 ?5))
+        (rimel-highlight-first t)
+        ;; page-no=0, highlighted=2, page-size=5
+        (ctx (rimel-test--make-context "test" '("a" "b" "c" "d") 2 0 t)))
+    ;; Mock librimel-get-candidates to return candidates starting from highlighted position
+    (let ((rimel-test--mock-candidates '("c" "d" "e" "f")))
+      (let ((result (rimel--format-candidates ctx)))
+        (should (stringp result))
+        ;; "c" should appear first (fetched from highlighted position)
+        ;; The first label "1." should be followed by "c"
+        (should (string-match "1\\.c" result))))))
+
+(ert-deftest rimel-test-format-candidates-highlight-first-fallback ()
+  "When librimel-get-candidates returns nil, fallback to current candidates."
   (let ((rimel-select-label-keys '(?1 ?2 ?3 ?4 ?5))
         (rimel-highlight-first t)
         (ctx (rimel-test--make-context "test" '("a" "b" "c" "d") 2 0 t)))
-    (let ((result (rimel--format-candidates ctx)))
-      (should (stringp result))
-      ;; "c" should appear first (highlighted idx=2 rotated to front)
-      ;; The first label "1." should be followed by "c"
-      (should (string-match "1\\.c" result)))))
+    ;; Mock librimel-get-candidates to return nil
+    (let ((rimel-test--mock-candidates nil))
+      (let ((result (rimel--format-candidates ctx)))
+        (should (stringp result))
+        ;; Should fallback to current candidates, "a" should be first
+        (should (string-match "1\\.a" result))))))
 
 (ert-deftest rimel-test-format-candidates-nil-context ()
   "Empty context should return nil."
