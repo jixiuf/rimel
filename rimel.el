@@ -99,77 +99,36 @@ set to \='candidate to inline candidate"
   :type '(choice (const :tag "Raw English" raw)
                  (const :tag "First candidate" preview))
   :group 'rimel)
-;; (?,   . #x002c)
-;; (?:   . #x003a)
-;; (?\;  . #x003b)
-;; (?`   . #x0060)
-;; (?~   . #x007e)
-;; (?<   . #x003c)
-;; (?>   . #x003e)
-;; (?/   . #x002f)
-;; (??   . #x003f)
-;; (?.   . #x002e)
-;; (?-   . #x002d)
-;; (?_   . #x005f)
-;; (?*   . #x002a)
-;; (?\(  . #x0028)
-;; (?\)  . #x0029)
-;; (?'   . #x0027)
-;; (?\"  . #x0022)
-;; (?&   . #x0026)
-;; (?%   . #x0025)
-;; (?$   . #x0024)
-;; (?#   . #x0023)
-;; (?!   . #x0021)
-;; (?@   . #x0040)
-;; (?+   . #x002b)
-;; (?=   . #x003d)
-;; (?\[  . #x005b)
-;; (?\]  . #x005d)
-;; (?{   . #x007b)
-;; (?}   . #x007d)
-;; (?\\  . #x005c)
-;; (?|   . #x007c)
+
 (defcustom rimel-keymap
-  '((home   . "<home>")
-    (left   . "<left>")
-    (right  . "<right>")
-    (up     . "<up>")
-    (down   . "<down>")
-    (?\C-p  . "<up>")
-    (?\C-n  . "<down>")
-    (prior  . "<prior>")
-    (next   . "<next>")
-    (?\C-b  . "<pageup>")
-    (?\C-f  . "<pagedown>")
-    (?\C-k  . "S-<delete>")
-    (end    . "<end>")
-    (begin  . "<home>")
-    (tab . "<tab>"))
-  "Alist of (emacs-key . rime-keycode) for candidate navigation.
+  '(("<home>"   . "<home>"    )
+    ("<left>"   . "<left>"    )
+    ("<right>"  . "<right>"   )
+    ("<up>"     . "<up>"      )
+    ("<down>"   . "<down>"    )
+    ("C-p"      . "<up>"      )
+    ("C-n"      . "<down>"    )
+    ("<prior>"  . "<prior>"   )
+    ("<next>"   . "<next>"    )
+    ("C-b"      . "<prior>"   )
+    ("C-f"      . "<next>"    )
+    ("C-k"      . "S-<delete>")
+    ("<end>"    . "<end>"     )
+    ("C-a"      . "<home>"    )
+    ("C-e"      . "<end>"     )
+    ("<tab>"    . "<tab>"     ))
+  "Keymap for custom keybindings in Rimel.
+Both KEY and VALUE must be strings in the format returned by
+\\[describe-key] (=describe-key').  This matches the format used
+for saving keyboard macros (see =edmacro-mode').
+Note: VALUE can be a sequence like \"C-c C-c\", but KEY cannot.
 
-Common Emacs keys: `right', `left', `next', `prior' etc.
-
-Value format supports:
-  \"0xFF52\" - plain hex keycode (with 0x prefix)
-  \"C-a\"    - Control + a (modifier + key)
-  \"M-a\"     - Alt + a
-  \"S-a\"     - Shift + a
-  \"s-a\"     - Super + a
-  \"H-a\"     - Hyper + a
-  \"<left>\"  - symbol key (angle brackets)
-  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
-
-Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper).
-Key can be: hex (0xFF52), char (a), or symbol (<left>).
-
-The rime-keycode can be a single string, or a list to try sequentially.
-Common rime keycodes (hex):
-https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173"
+Examples:
+    \"H-<left>\"
+    \"M-RET\"
+    \"C-M-<return>\""
   :type '(repeat (cons (sexp :tag "Emacs key")
-                       (choice (string :tag "Rime key")
-                               (repeat :tag "Rime keys"
-                                       (string :tag "Rime key")))))
+                       (string :tag "Rime key")))
   :group 'rimel)
 
 (defcustom rimel-confirm-keys '(?\s)
@@ -349,9 +308,9 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
       (let ((parts '())
             (idx 0)
             (candidates-list (if (and rimel-highlight-first (> highlighted 0))
-                                  (append (nthcdr highlighted candidates)
-                                          (cl-subseq candidates 0 highlighted))
-                                candidates))
+                                 (append (nthcdr highlighted candidates)
+                                         (cl-subseq candidates 0 highlighted))
+                               candidates))
             (highlight-idx (if rimel-highlight-first 0 highlighted)))
         ;; Preedit (only for echo-area, posframe has overlay)
         (when (and show-preedit preedit)
@@ -457,108 +416,6 @@ Includes lowercase letters and common Chinese punctuation marks."
 Works for both character (integer) and symbol events."
   (memq event keys))
 
-(defun rimel--feed-key (key &optional mask)
-  "Send KEY to librimel for processing.  Return non-nil if handled.
-MASK is an optional modifier mask to apply to the key."
-  (if mask
-      (librimel-process-key key mask)
-    (librimel-process-key key)))
-
-(defun rimel--feed-key-string (keycode)
-  "Parse KEYCODE string(s) and feed to rime.
-Supports formats:
-  ?a              - char
-  #xFF52          - hex keycode
-  \"0xFF52\"      - plain hex keycode
-  \"C-a\"         - Control plus key
-  \"M-a\"         - Alt (Mod1) plus key
-  \"S-a\"         - Shift plus key
-  \"s-a\"         - Super plus key
-  \"H-a\"         - Hyper plus key
-  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
-The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\"."
-  (cond
-   ((listp keycode)
-    (dolist (kc keycode)
-      (rimel--feed-key-string kc)))
-   ((stringp keycode)
-    (let ((case-fold-search nil)
-          (modifiers 0)
-          (key keycode))
-      (while (string-match "^\\([CMsSH]+\\)-" key)
-        (dolist (mod (string-to-list (match-string 1 key)))
-          (pcase mod
-            (?C (setq modifiers (logior modifiers 4)))
-            (?M (setq modifiers (logior modifiers 8)))
-            (?s (setq modifiers (logior modifiers (ash 1 26))))
-            (?S (setq modifiers (logior modifiers 1)))
-            (?H (setq modifiers (logior modifiers (ash 1 27))))))
-        (setq key (substring key (match-end 0))))
-      (let ((keyval
-             (cond
-              ((numberp key) key)       ;#xff52, ?a
-              ;; hex keycode like "0xFF52" or "FF52"
-              ((string-match "^0x[0-9A-Fa-f]+$" key)
-               (string-to-number (substring key 2) 16))
-              ;; single char like "a"
-              ((= (length key) 1)
-               (if (string-match "[0-9A-Z]" key)
-                   (+ 64 (- (aref key 0) ?A))
-                 (aref key 0)))
-              ;; symbol like "<left>"
-              ((string-match "^<\\(.+\\)>$" key)
-               (let ((sym (downcase (match-string 1 key))))
-                 (pcase sym
-                   ;; https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
-                   ("shift-l" #xffe1)
-                   ("shift-r" #xffe2)
-                   ("control-l" #xffe3)
-                   ("control-r" #xffe4)
-                   ("capslock" #xffe5)
-                   ("shiftlock" #xffe6)
-                   ("meta-l" #xffe7)
-                   ("meta-r" #xffe8)
-                   ("alt-l" #xffe9)
-                   ("alt-r" #xffea)
-                   ("super-l" #xffeb)
-                   ("super-r" #xffec)
-                   ("hyper-l" #xffed)
-                   ("hyper-r" #xffee)
-                   ("left" #xff51)
-                   ("right" #xff53)
-                   ("up" #xff52)
-                   ("down" #xff54)
-                   ("prior" #xff55)
-                   ("pageup" #xff55)
-                   ("next" #xff56)
-                   ("pagedown" #xff56)
-                   ("home" #xff50)
-                   ("end" #xff57)
-                   ("delete" #xffff)
-                   ("backspace" #xff08)
-                   ("return" #xff0d)
-                   ("comma" #x002c)
-                   ("colon" #x003a)
-                   ("semicolon" #x003b)
-                   ("grave" #x0060)
-                   ("less" #x003c)
-                   ("greater" #x003e)
-                   ("equal" #x003d)
-                   ("slash" #x002f)
-                   ("period" #x002e)
-                   ("question" #x003f)
-                   ("minus" #x002d)
-                   ("plus" #x002b)
-                   ("bracketleft" #x005b)
-                   ("bracketright" #x005d)
-                   ("backslash" #x005c)
-                   ("space" #x0020)
-                   ("tab" #xff09)
-                   ("escape" #xff1b)
-                   (_ (user-error "Unknown key symbol: %s" key)))))
-              (t (user-error "Invalid key format: %s" key)))))
-        (rimel--feed-key keyval modifiers))))))
-
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
   (let ((commit (librimel-get-commit)))
@@ -602,7 +459,7 @@ This function serves as `input-method-function'."
       (list key)
     ;; Start composition
     (librimel-clear-composition)
-    (rimel--feed-key key)
+    (librimel-process-key key)
     ;; Check immediate commit (e.g., rime auto-select)
     (let ((commit (rimel--get-commit)))
       (if commit
@@ -635,8 +492,11 @@ This function serves as `input-method-function'."
   )
 (defun rimel--feed-key-and-check (key)
   "Send KEY to rime.  Return committed text if any, otherwise update display."
-  (rimel--feed-key key)
+  (librimel-process-key key)
   (rimel--check-commit))
+
+(defun rimerl--get-key(pair)
+  (car (listify-key-sequence (kbd (car pair)))))
 
 (defun rimel--composition-loop ()
   "Main composition loop.  Read events until composition finishes.
@@ -674,7 +534,7 @@ Return list of characters to insert, or nil."
 
                ;; Backspace - delete last character
                ((rimel--event-in-p event rimel-backspace-keys)
-                (rimel--feed-key 65288)
+                (librimel-process-key #xff08) ;backspace
                 (let ((input (librimel-get-input)))
                   (if (or (null input) (string-equal input ""))
                       (setq continue nil)
@@ -686,9 +546,11 @@ Return list of characters to insert, or nil."
                 (setq continue nil))
 
                ;; Key mapping via rimel-keymap
-               ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
+               ((when-let* ((pair (cl-find event rimel-keymap
+                                           :key #'rimerl--get-key
+                                           :test #'equal))
                             (rime-keycode (cdr pair)))
-                  (rimel--feed-key-string rime-keycode)
+                  (librimel-process-keys (kbd rime-keycode))
                   (when-let* ((commit (rimel--check-commit)))
                     (setq result commit continue nil))
                   t))

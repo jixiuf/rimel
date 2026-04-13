@@ -70,8 +70,8 @@ Rimel 是一个轻量级的 Emacs 中文输入法
 
 ```elisp
 ;; 使用 C-v / M-v 翻页
-(add-to-list 'rimel-keymap '(?\C-v . "<pagedown>"))
-(add-to-list 'rimel-keymap '(?\M-v . "<pageup>"))
+(add-to-list 'rimel-keymap '("C-v" . "<next>"))
+(add-to-list 'rimel-keymap '("M-v" . "<prior>"))
 
 
 ;; Enter 上屏首选候选而非英文
