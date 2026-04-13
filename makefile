@@ -13,6 +13,21 @@ ifneq (,$(findstring MINGW,$(UNAME_S)))
 	LIBRIME = -llibrime
 endif
 
+## macOS
+ifneq (,$(findstring Darwin,$(UNAME_S)))
+	SUFFIX = .dylib
+	CC = clang
+	# 使用 pkg-config 获取 brew 安装的 librime 编译参数
+	ifneq (,$(shell which pkg-config 2>/dev/null))
+		RIME_CFLAGS := $(shell pkg-config --cflags rime 2>/dev/null)
+		RIME_LDFLAGS := $(shell pkg-config --libs rime 2>/dev/null)
+		ifneq (,$(RIME_CFLAGS))
+			CFLAGS += $(RIME_CFLAGS)
+			LIBRIME = $(RIME_LDFLAGS)
+		endif
+	endif
+endif
+
 ifdef MODULE_FILE_SUFFIX
 	SUFFIX = $(MODULE_FILE_SUFFIX)
 endif

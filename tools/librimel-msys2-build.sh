@@ -97,35 +97,23 @@ function archive_librimel() {
         zip_file="${PWD}/librimel-windows-${ARCH}.zip"
     fi
 
-    local temp_dir="temp"
+    local archive_dir="${ARCHIVE_NAME:-librimel-windows-${ARCH}}"
 
-    install -Dm644 tools/README-archive.txt ${temp_dir}/README.txt
+    install -Dm644 librimel.el -t ${archive_dir}/
+    install -Dm644 src/librimel-core.dll -t ${archive_dir}/
 
-    install -Dm644 librimel.el -t ${temp_dir}/share/emacs/site-lisp/librimel/
-    install -Dm644 src/librimel-core.dll -t ${temp_dir}/share/emacs/site-lisp/librimel/
-
-    install -Dm644 ${MINGW_PREFIX}/bin/librime-1.dll -t ${temp_dir}/bin/
+    # 将依赖的 dll 放到 bin/ 子目录
+    install -Dm644 ${MINGW_PREFIX}/bin/librime-1.dll -t ${archive_dir}/bin/
     install_all_dll ${MINGW_PREFIX}/bin/librime-1.dll    \
-                    ${temp_dir}/bin/                   \
+                    ${archive_dir}/bin/                   \
                     "mingw32/bin\\|mingw32/lib\\|mingw64/bin\\|mingw64/lib\\|usr/bin\\|usr/lib"
 
-    install -Dm644 ${INSTALL_PREFIX}/lib/librime* -t ${temp_dir}/lib/
-    install -Dm644 ${INSTALL_PREFIX}/include/rime* -t ${temp_dir}/include/
-
-    install -Dm644 ${INSTALL_PREFIX}/share/opencc/* -t ${temp_dir}/share/rime-data/opencc/
-
-    install -Dm644 ${RIME_DATA_DIR}/*.* -t ${temp_dir}/share/rime-data/
-
-    ## 有些 rime schema 会自带 opencc 文件，保存在 rime-data/opencc 目录下面。
-    ## 比如： rime-emoji
-    install -Dm644 ${RIME_DATA_DIR}/opencc/* -t ${temp_dir}/share/rime-data/opencc/
-
-    cd ${temp_dir}
+    cd ${archive_dir}
     zip -r "${zip_file}" . > /dev/null
-    
+
     cd ..
-    rm -rf ${temp_dir}
-    
+    rm -rf ${archive_dir}
+
     echo "Archive librimel to file: ${zip_file}"
 }
 
