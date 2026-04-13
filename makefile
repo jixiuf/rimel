@@ -85,7 +85,7 @@ test/test_librimel: test/test_librimel.c
 
 # Run all tests
 .PHONY: test
-test: test test-c test-integration
+test: test-rimel test-c test-integration
 
 librimel-build:
 	make -f Makefile-librimel-build

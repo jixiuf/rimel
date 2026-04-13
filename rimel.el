@@ -42,6 +42,7 @@
 (declare-function librimel-select-candidate "ext:librimel-core")
 (declare-function librimel-get-schema-list "ext:librimel-core")
 (declare-function librimel-sync-user-data "ext:librimel-core")
+(declare-function librimel-get-candidates "ext:librimel-core")
 
 ;;; Customization
 
