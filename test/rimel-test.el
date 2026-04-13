@@ -131,6 +131,14 @@ Can be set in tests to simulate rime behavior.")
     (interactive)
     nil)
 
+  (defun liberime-get-candidates ( &optional num pos)
+    "Mock: return rotated candidates from POS, up to NUM items."
+    (let* ((len (length rimel-test--rime-candidates))
+           (start (min pos len))
+           (count (or num (- len start))))
+      (append (cl-subseq rimel-test--rime-candidates start (min (+ start count) len))
+              (cl-subseq rimel-test--rime-candidates 0 (max 0 (- count (- len start)))))))
+
   (defun liberime-process-keys (keys)
     "Mock: simulate key processing."
     (let ((keyseq (cond
@@ -271,6 +279,7 @@ Can be set in tests to simulate rime behavior.")
                         (highlighted-candidate-index . 2)
                         (page-no . 0)
                         (last-page-p . t))))))
+    (setq rimel-test--rime-candidates '("a" "b" "c" "d" "e"))
     (let ((result (rimel--format-candidates ctx)))
       ;; With highlighted=2, rotation should put "c" first
       (should (string-match-p "^1\\.c" result)))))         ; c is first after rotation

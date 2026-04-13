@@ -40,6 +40,7 @@
 (declare-function liberime-get-input "ext:liberime-core")
 (declare-function liberime-clear-composition "ext:liberime-core")
 (declare-function liberime-select-candidate "ext:liberime-core")
+(declare-function liberime-get-candidates "ext:liberime-core")
 
 ;;; Customization
 
@@ -280,16 +281,17 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          (preedit (alist-get 'preedit composition))
          (menu (alist-get 'menu context))
          (candidates (alist-get 'candidates menu))
-         (highlighted (alist-get 'highlighted-candidate-index menu))
-         (page-no (alist-get 'page-no menu))
+         (highlighted (or (alist-get 'highlighted-candidate-index menu) 0))
+         (page-no (or (alist-get 'page-no menu) 0))
+         (page-size (or (alist-get 'page-size menu) 5))
+         (pos (+ (* page-no page-size) highlighted))
          (last-page-p (alist-get 'last-page-p menu))
          (sep (or separator " ")))
     (when candidates
       (let ((parts '())
             (idx 0)
             (candidates-list (if (and rimel-highlight-first (> highlighted 0))
-                                 (append (nthcdr highlighted candidates)
-                                         (cl-subseq candidates 0 highlighted))
+                                 (or (liberime-get-candidates page-size pos) candidates)
                                candidates))
             (highlight-idx (if rimel-highlight-first 0 highlighted)))
         ;; Preedit (only for echo-area, posframe has overlay)
@@ -515,7 +517,12 @@ The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\".
 
 (defun rimel--select-candidate (idx)
   "Select candidate at IDX (0-based).  Return committed text or nil."
-  (liberime-select-candidate idx)
+(if rimel-highlight-first
+      (let* ((ctx (liberime-get-context))
+             (menu (alist-get 'menu ctx))
+             (highlighted (alist-get 'highlighted-candidate-index menu)))
+        (liberime-select-candidate (+ idx (or highlighted 0))))
+    (liberime-select-candidate idx))
   (or (rimel--get-commit)
       (rimel--update-display)))
 
