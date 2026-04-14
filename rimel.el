@@ -646,7 +646,6 @@ Return list of characters to insert, or nil."
 
                ;; Unhandled key - exit composition, push key back
                (t
-                (print "oooooooo")
                 (liberime-clear-composition)
                 (setq continue nil)
                 (setq unread-command-events
