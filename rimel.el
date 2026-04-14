@@ -79,77 +79,36 @@ set to \='candidate to inline candidate"
   :type '(choice (const :tag "Raw English" raw)
                  (const :tag "First candidate" preview))
   :group 'rimel)
-;; (?,   . #x002c)
-;; (?:   . #x003a)
-;; (?\;  . #x003b)
-;; (?`   . #x0060)
-;; (?~   . #x007e)
-;; (?<   . #x003c)
-;; (?>   . #x003e)
-;; (?/   . #x002f)
-;; (??   . #x003f)
-;; (?.   . #x002e)
-;; (?-   . #x002d)
-;; (?_   . #x005f)
-;; (?*   . #x002a)
-;; (?\(  . #x0028)
-;; (?\)  . #x0029)
-;; (?'   . #x0027)
-;; (?\"  . #x0022)
-;; (?&   . #x0026)
-;; (?%   . #x0025)
-;; (?$   . #x0024)
-;; (?#   . #x0023)
-;; (?!   . #x0021)
-;; (?@   . #x0040)
-;; (?+   . #x002b)
-;; (?=   . #x003d)
-;; (?\[  . #x005b)
-;; (?\]  . #x005d)
-;; (?{   . #x007b)
-;; (?}   . #x007d)
-;; (?\\  . #x005c)
-;; (?|   . #x007c)
+
 (defcustom rimel-keymap
-  '((home   . "<home>")
-    (left   . "<left>")
-    (right  . "<right>")
-    (up     . "<up>")
-    (down   . "<down>")
-    (?\C-p  . "<up>")
-    (?\C-n  . "<down>")
-    (prior  . "<prior>")
-    (next   . "<next>")
-    (?\C-b  . "<pageup>")
-    (?\C-f  . "<pagedown>")
-    (?\C-k  . "S-<delete>")
-    (end    . "<end>")
-    (begin  . "<home>")
-    (tab . "<tab>"))
-  "Alist of (emacs-key . rime-keycode) for candidate navigation.
+  '(("<home>"   . "<home>"    )
+    ("<left>"   . "<left>"    )
+    ("<right>"  . "<right>"   )
+    ("<up>"     . "<up>"      )
+    ("<down>"   . "<down>"    )
+    ("C-p"      . "<up>"      )
+    ("C-n"      . "<down>"    )
+    ("<prior>"  . "<prior>"   )
+    ("<next>"   . "<next>"    )
+    ("C-b"      . "<prior>"   )
+    ("C-f"      . "<next>"    )
+    ("C-k"      . "S-<delete>")
+    ("<end>"    . "<end>"     )
+    ("C-a"      . "<home>"    )
+    ("C-e"      . "<end>"     )
+    ("<tab>"    . "<tab>"     ))
+  "Keymap for custom keybindings in Rimel.
+Both KEY and VALUE must be strings in the format returned by
+\\[describe-key] (=describe-key').  This matches the format used
+for saving keyboard macros (see =edmacro-mode').
+Note: VALUE can be a sequence like \"C-c C-c\", but KEY cannot.
 
-Common Emacs keys: `right', `left', `next', `prior' etc.
-
-Value format supports:
-  \"0xFF52\" - plain hex keycode (with 0x prefix)
-  \"C-a\"    - Control + a (modifier + key)
-  \"M-a\"     - Alt + a
-  \"S-a\"     - Shift + a
-  \"s-a\"     - Super + a
-  \"H-a\"     - Hyper + a
-  \"<left>\"  - symbol key (angle brackets)
-  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
-
-Modifiers: C- (Control), M- (Alt), S- (Shift), s- (Super), H- (Hyper).
-Key can be: hex (0xFF52), char (a), or symbol (<left>).
-
-The rime-keycode can be a single string, or a list to try sequentially.
-Common rime keycodes (hex):
-https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173"
+Examples:
+    \"H-<left>\"
+    \"M-RET\"
+    \"C-M-<return>\""
   :type '(repeat (cons (sexp :tag "Emacs key")
-                       (choice (string :tag "Rime key")
-                               (repeat :tag "Rime keys"
-                                       (string :tag "Rime key")))))
+                       (string :tag "Rime key")))
   :group 'rimel)
 
 (defcustom rimel-confirm-keys '(?\s)
@@ -329,9 +288,9 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
       (let ((parts '())
             (idx 0)
             (candidates-list (if (and rimel-highlight-first (> highlighted 0))
-                                  (append (nthcdr highlighted candidates)
-                                          (cl-subseq candidates 0 highlighted))
-                                candidates))
+                                 (append (nthcdr highlighted candidates)
+                                         (cl-subseq candidates 0 highlighted))
+                               candidates))
             (highlight-idx (if rimel-highlight-first 0 highlighted)))
         ;; Preedit (only for echo-area, posframe has overlay)
         (when (and show-preedit preedit)
@@ -582,7 +541,7 @@ This function serves as `input-method-function'."
       (list key)
     ;; Start composition
     (liberime-clear-composition)
-    (rimel--feed-key key)
+    (liberime-process-key key)
     ;; Check immediate commit (e.g., rime auto-select)
     (let ((commit (rimel--get-commit)))
       (if commit
@@ -615,8 +574,18 @@ This function serves as `input-method-function'."
   )
 (defun rimel--feed-key-and-check (key)
   "Send KEY to rime.  Return committed text if any, otherwise update display."
-  (rimel--feed-key key)
+  (liberime-process-key key)
   (rimel--check-commit))
+
+(defun rimerl--get-key(pair)
+  (let ((key (car pair)))
+    (cond
+     ((numberp key)
+      (car (listify-key-sequence (vector key))))
+     ((symbolp key)
+      (car (listify-key-sequence (vector key))))
+     ((stringp key)
+      (car (listify-key-sequence (kbd key)))))))
 
 (defun rimel--composition-loop ()
   "Main composition loop.  Read events until composition finishes.
@@ -654,7 +623,7 @@ Return list of characters to insert, or nil."
 
                ;; Backspace - delete last character
                ((rimel--event-in-p event rimel-backspace-keys)
-                (rimel--feed-key 65288)
+                (liberime-process-key #xff08) ;backspace
                 (let ((input (liberime-get-input)))
                   (if (or (null input) (string-equal input ""))
                       (setq continue nil)
@@ -666,15 +635,18 @@ Return list of characters to insert, or nil."
                 (setq continue nil))
 
                ;; Key mapping via rimel-keymap
-               ((when-let* ((pair (cl-find event rimel-keymap :key #'car :test #'equal))
+               ((when-let* ((pair (cl-find event rimel-keymap
+                                           :key #'rimerl--get-key
+                                           :test #'equal))
                             (rime-keycode (cdr pair)))
-                  (rimel--feed-key-string rime-keycode)
+                  (liberime-process-keys (kbd rime-keycode))
                   (when-let* ((commit (rimel--check-commit)))
                     (setq result commit continue nil))
                   t))
 
                ;; Unhandled key - exit composition, push key back
                (t
+                (print "oooooooo")
                 (liberime-clear-composition)
                 (setq continue nil)
                 (setq unread-command-events

@@ -127,9 +127,23 @@ Can be set in tests to simulate rime behavior.")
     nil)
 
   (defun liberime-sync ()
-    "Mock: no-op."
+    "Mock: sync rime user data."
     (interactive)
     nil)
+
+  (defun liberime-process-keys (keys)
+    "Mock: simulate key processing."
+    (let ((keyseq (cond
+                   ((stringp keys) (kbd keys))
+                   ((vectorp keys) keys)
+                   ((listp keys) keys)
+                   (t (kbd keys)))))
+      (mapc (lambda (k)
+              (when (and (integerp k) (>= k ?a) (<= k ?z))
+                (setq rimel-test--rime-input
+                      (concat rimel-test--rime-input (char-to-string k)))))
+            (if (vectorp keyseq) keyseq (list keyseq))))
+    t)
 
   (provide 'liberime))
 
@@ -141,7 +155,7 @@ Can be set in tests to simulate rime behavior.")
 
 (defun rimel-test-run ()
   "Run all rimel ERT tests and exit with appropriate status."
-  (ert-run-tests-batch-and-exit "^rimel-test-"))
+  (ert-run-tests-batch-and-exit "rimel-test-*"))
 
 ;; -----------------------------------------------------------------------
 ;; Test: composable-key-p
@@ -653,14 +667,14 @@ Can be set in tests to simulate rime behavior.")
 
 (ert-deftest rimel-test-keymap-entries ()
   "Test that rimel-keymap has expected entries."
-  (should (assq 'up rimel-keymap))                         ; up key mapped
-  (should (assq 'down rimel-keymap))                       ; down key mapped
-  (should (assq 'left rimel-keymap))                       ; left key mapped
-  (should (assq 'right rimel-keymap))                      ; right key mapped
-  (should (assq 'prior rimel-keymap))                      ; prior mapped
-  (should (assq 'next rimel-keymap))                       ; next mapped
-  (should (assq ?\C-p rimel-keymap))                       ; C-p mapped
-  (should (assq ?\C-n rimel-keymap)))                      ; C-n mapped
+  (should (cl-find "<up>" rimel-keymap :key #'car :test #'equal))       ; up key mapped
+  (should (cl-find "<down>" rimel-keymap :key #'car :test #'equal))     ; down key mapped
+  (should (cl-find "<left>" rimel-keymap :key #'car :test #'equal))     ; left key mapped
+  (should (cl-find "<right>" rimel-keymap :key #'car :test #'equal))    ; right key mapped
+  (should (cl-find "<prior>" rimel-keymap :key #'car :test #'equal))    ; prior mapped
+  (should (cl-find "<next>" rimel-keymap :key #'car :test #'equal))     ; next mapped
+  (should (cl-find "C-p" rimel-keymap :key #'car :test #'equal))       ; C-p mapped
+  (should (cl-find "C-n" rimel-keymap :key #'car :test #'equal)))      ; C-n mapped
 
 ;; -----------------------------------------------------------------------
 ;; Test: posframe bottom detection
@@ -799,10 +813,10 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-candidates '("你"))
   (with-temp-buffer
     (cl-letf (((symbol-function 'read-event)
-               (lambda () ?\C-a)))                         ; unhandled key
+               (lambda () ?\C-t)))                         ; unhandled key
       (let ((unread-command-events nil))
         (rimel--composition-loop)
-        (should (memq ?\C-a unread-command-events))))))    ; key pushed back
+        (should (memq ?\C-t unread-command-events))))))    ; key pushed back
 
 ;; -----------------------------------------------------------------------
 ;; Test: update-display
