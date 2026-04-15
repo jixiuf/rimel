@@ -5,3 +5,4 @@ rimel-autoloads.el
 src/*.o
 src/*.so
 *.so
+/.agent-shell/

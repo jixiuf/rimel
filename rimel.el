@@ -212,6 +212,13 @@ display as [c d e a b]."
   "Face for the posframe border."
   :group 'rimel)
 
+(defcustom rimel-posframe-properties
+  nil
+  "Properties for posframe.
+See =posframe-show= for supported values."
+  :type '(plist)
+  :group 'rimel)
+
 ;;; Internal variables
 
 (defvar rimel--preedit-overlay nil
@@ -353,7 +360,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
                      context sep (eq rimel-inline-preedit 'candidate))))
       (if (not content)
           (rimel--posframe-hide)
-        (posframe-show
+        (apply #'posframe-show
          rimel--posframe-buffer
          :string content
          :x-pixel-offset 2
@@ -365,7 +372,8 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          :border-width 1
          :border-color (face-background 'rimel-posframe-border-face nil t)
          :min-width rimel-posframe-min-width
-         :timeout nil)))))
+         :timeout nil
+         rimel-posframe-properties)))))
 
 (defun rimel--posframe-hide ()
   "Hide the posframe candidate display."
@@ -658,7 +666,6 @@ to detecting $ and \\ prefixes."
         (and (> (point) (point-min))
              (let ((ch (char-before)))
                (or (eq ch ?$) (eq ch ?\\)))))))
-
 
 ;;;###autoload (autoload 'rimel-select-schema "rimel" "Select a rime schema interactive." t)
 (defalias 'rimel-select-schema #'liberime-select-schema-interactive)
