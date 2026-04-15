@@ -41,6 +41,8 @@
 (declare-function liberime-clear-composition "ext:liberime-core")
 (declare-function liberime-select-candidate "ext:liberime-core")
 (declare-function liberime-get-candidates "ext:liberime-core")
+(declare-function posframe-show "ext:posframe")
+(declare-function posframe-hide "ext:posframe")
 
 ;;; Customization
 
@@ -102,7 +104,7 @@ set to \='candidate to inline candidate"
 Both KEY and VALUE must be strings in the format returned by
 \\[describe-key] (=describe-key').  This matches the format used
 for saving keyboard macros (see =edmacro-mode').
-Note: VALUE can be a sequence like \"C-c C-c\", but KEY cannot.
+Note: VALUE can be a sequence, but KEY cannot.
 
 Examples:
     \"H-<left>\"
@@ -222,8 +224,6 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
 (defvar rimel--posframe-buffer " *rimel-posframe*"
   "Buffer name for posframe candidate display.")
 
-(declare-function posframe-show "ext:posframe")
-(declare-function posframe-hide "ext:posframe")
 
 ;;; Activation / Deactivation
 
@@ -405,101 +405,6 @@ MASK is an optional modifier mask to apply to the key."
       (liberime-process-key key mask)
     (liberime-process-key key)))
 
-(defun rimel--feed-key-string (keycode)
-  "Parse KEYCODE string(s) and feed to rime.
-Supports formats:
-  ?a              - char
-  #xFF52          - hex keycode
-  \"0xFF52\"      - plain hex keycode
-  \"C-a\"         - Control plus key
-  \"M-a\"         - Alt (Mod1) plus key
-  \"S-a\"         - Shift plus key
-  \"s-a\"         - Super plus key
-  \"H-a\"         - Hyper plus key
-  (\"C-a\" \"M-b\") - list of keycodes to try sequentially
-The key after C-/M-/S/s/H- can be a char like \"a\" or a symbol like \"<left>\"."
-  (cond
-   ((listp keycode)
-    (dolist (kc keycode)
-      (rimel--feed-key-string kc)))
-   ((stringp keycode)
-    (let ((case-fold-search nil)
-          (modifiers 0)
-          (key keycode))
-      (while (string-match "^\\([CMsSH]+\\)-" key)
-        (dolist (mod (string-to-list (match-string 1 key)))
-          (pcase mod
-            (?C (setq modifiers (logior modifiers 4)))
-            (?M (setq modifiers (logior modifiers 8)))
-            (?s (setq modifiers (logior modifiers (ash 1 26))))
-            (?S (setq modifiers (logior modifiers 1)))
-            (?H (setq modifiers (logior modifiers (ash 1 27))))))
-        (setq key (substring key (match-end 0))))
-      (let ((keyval
-             (cond
-              ((numberp key) key)       ;#xff52, ?a
-              ;; hex keycode like "0xFF52" or "FF52"
-              ((string-match "^0x[0-9A-Fa-f]+$" key)
-               (string-to-number (substring key 2) 16))
-              ;; single char like "a"
-              ((= (length key) 1)
-               (if (string-match "[0-9A-Z]" key)
-                   (+ 64 (- (aref key 0) ?A))
-                 (aref key 0)))
-              ;; symbol like "<left>"
-              ((string-match "^<\\(.+\\)>$" key)
-               (let ((sym (downcase (match-string 1 key))))
-                 (pcase sym
-                   ;; https://github.com/rime/librime/blob/master/include/X11/keysymdef.h#L173
-                   ("shift-l" #xffe1)
-                   ("shift-r" #xffe2)
-                   ("control-l" #xffe3)
-                   ("control-r" #xffe4)
-                   ("capslock" #xffe5)
-                   ("shiftlock" #xffe6)
-                   ("meta-l" #xffe7)
-                   ("meta-r" #xffe8)
-                   ("alt-l" #xffe9)
-                   ("alt-r" #xffea)
-                   ("super-l" #xffeb)
-                   ("super-r" #xffec)
-                   ("hyper-l" #xffed)
-                   ("hyper-r" #xffee)
-                   ("left" #xff51)
-                   ("right" #xff53)
-                   ("up" #xff52)
-                   ("down" #xff54)
-                   ("prior" #xff55)
-                   ("pageup" #xff55)
-                   ("next" #xff56)
-                   ("pagedown" #xff56)
-                   ("home" #xff50)
-                   ("end" #xff57)
-                   ("delete" #xffff)
-                   ("backspace" #xff08)
-                   ("return" #xff0d)
-                   ("comma" #x002c)
-                   ("colon" #x003a)
-                   ("semicolon" #x003b)
-                   ("grave" #x0060)
-                   ("less" #x003c)
-                   ("greater" #x003e)
-                   ("equal" #x003d)
-                   ("slash" #x002f)
-                   ("period" #x002e)
-                   ("question" #x003f)
-                   ("minus" #x002d)
-                   ("plus" #x002b)
-                   ("bracketleft" #x005b)
-                   ("bracketright" #x005d)
-                   ("backslash" #x005c)
-                   ("space" #x0020)
-                   ("tab" #xff09)
-                   ("escape" #xff1b)
-                   (_ (user-error "Unknown key symbol: %s" key)))))
-              (t (user-error "Invalid key format: %s" key)))))
-        (rimel--feed-key keyval modifiers))))))
-
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
   (let ((commit (liberime-get-commit)))
@@ -577,14 +482,15 @@ This function serves as `input-method-function'."
                   (append (string-to-list input) unread-command-events)))
           commit)
       (rimel--update-display)
-      nil))
-  )
+      nil)))
+
 (defun rimel--feed-key-and-check (key)
   "Send KEY to rime.  Return committed text if any, otherwise update display."
   (liberime-process-key key)
   (rimel--check-commit))
 
-(defun rimerl--get-key(pair)
+(defun rimel--get-key(pair)
+  "Get key from PAIR for `liberime-process-keys'."
   (let ((key (car pair)))
     (cond
      ((numberp key)
@@ -643,7 +549,7 @@ Return list of characters to insert, or nil."
 
                ;; Key mapping via rimel-keymap
                ((when-let* ((pair (cl-find event rimel-keymap
-                                           :key #'rimerl--get-key
+                                           :key #'rimel--get-key
                                            :test #'equal))
                             (rime-keycode (cdr pair)))
                   (liberime-process-keys (kbd rime-keycode))
