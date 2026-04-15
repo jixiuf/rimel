@@ -10,6 +10,8 @@
 (require 'ert)
 (require 'cl-lib)
 
+(declare-function liberime-clear-composition "liberime-core")
+
 ;; -----------------------------------------------------------------------
 ;; Mock liberime — stub out the C dynamic module for pure Elisp testing
 ;; -----------------------------------------------------------------------

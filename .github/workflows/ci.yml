@@ -34,6 +34,7 @@ jobs:
           (defun liberime-process-key (_key) nil)
           (defun liberime-clear-composition () nil)
           (defun liberime-search (_str _limit) nil)
+          (defun liberime-get-candidates (_str _limit) nil)
           (defun liberime-select-schema (_schema) nil)
           (defun liberime-get-schema-list () nil)
           (defun liberime-select-schema-interactive () nil)
@@ -42,6 +43,7 @@ jobs:
           (defun liberime-workable-p () nil)
           (defun liberime-load () nil)
           (defun liberime-sync () nil)
+          (defun liberime-process-keys(_s) nil)
           (provide 'liberime)
           ;;; liberime.el ends here
           STUB
