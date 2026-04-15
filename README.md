@@ -50,6 +50,8 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ;; horizontal or vertical
 (setq rimel-posframe-style 'horizontal)
 
+;; 自定义 posframe 属性 (可选)
+(setq rimel-posframe-properties '(:left-fringe 10 :right-fringe 10))
 ```
 
 ## 按键说明
@@ -67,7 +69,6 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | `Backspace`/`C-h` | 删除最后一个字符 | `rimel-backspace-keys` |
 | `Escape`/`C-g` | 取消输入 | `rimel-cancel-keys` |
 | 其他键 | 退出输入法并执行原按键 | — |
-
 
 ### 按键配置示例
 
