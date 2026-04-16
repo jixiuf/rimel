@@ -60,14 +60,14 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 |------|------|----------|
 | `a-z` | 输入拼音 | — |
 | `1-9` | 选择对应候选 | `rimel-select-label-keys` |
-| `Space` | 选择第一个候选 | `rimel-confirm-keys` |
-| `Enter` | 英文上屏 / 首选上屏 | `rimel-commit-raw-keys` |
+| `Space` | 选择第一个候选 | `rimel-keymap` |
+| `Enter` | 英文上屏 / 首选上屏 | `rimel-keymap` |
 | `C-f` `PgDn` | 下一页 | `rimel-keymap` |
 | `C-b` `PgUp` | 上一页 | `rimel-keymap` |
 | `C-p` `C-n` | 上/下一个 | `rimel-keymap` |
 | `C-k`  | send Shift+delete(从用户词典中删除) | `rimel-keymap` |
-| `Backspace`/`C-h` | 删除最后一个字符 | `rimel-backspace-keys` |
-| `Escape`/`C-g` | 取消输入 | `rimel-cancel-keys` |
+| `Backspace` | 删除最后一个字符 | `rimel-keymap` |
+| `Escape`/`C-g` | 取消输入 | `rimel-keymap` |
 | 其他键 | 退出输入法并执行原按键 | — |
 
 ### 按键配置示例
@@ -77,9 +77,9 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 (add-to-list 'rimel-keymap '("C-v" . "<next>"))
 (add-to-list 'rimel-keymap '("M-v" . "<prior>"))
 
+;; 双拼用户可能需要的一次删除两个字符
+(add-to-list 'rimel-keymap '("C-<backspace>" . "<backspace><backspace>"))
 
-;; Enter 上屏首选候选而非英文
-(setq rimel-return-behavior 'preview)
 ```
 
 ## Predicates 断言（自动切换中英文）

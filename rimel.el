@@ -75,31 +75,32 @@ set to \='candidate to inline candidate"
                  (const :tag "Disable inline preedit" nil))
   :group 'rimel)
 
-(defcustom rimel-return-behavior 'raw
-  "Behavior of Enter key during composition.
-`raw'     - commit the raw input as English (e.g., \"nihao\")
-`preview' - commit the first candidate preview"
-  :type '(choice (const :tag "Raw English" raw)
-                 (const :tag "First candidate" preview))
-  :group 'rimel)
-
 (defcustom rimel-keymap
-  '(("<home>"   . "<home>"    )
-    ("<left>"   . "<left>"    )
-    ("<right>"  . "<right>"   )
-    ("<up>"     . "<up>"      )
-    ("<down>"   . "<down>"    )
-    ("C-p"      . "<up>"      )
-    ("C-n"      . "<down>"    )
-    ("<prior>"  . "<prior>"   )
-    ("<next>"   . "<next>"    )
-    ("C-b"      . "<prior>"   )
-    ("C-f"      . "<next>"    )
-    ("C-k"      . "S-<delete>")
-    ("<end>"    . "<end>"     )
-    ("C-a"      . "<home>"    )
-    ("C-e"      . "<end>"     )
-    ("<tab>"    . "<tab>"     ))
+  '(("<home>"      . "<home>"                   )
+    ("<left>"      . "<left>"                   )
+    ("<escape>"    . "<escape>"                 )
+    ("<return>"    . "<return>"                 )
+    ("C-m"         . "<return>"                 )
+    ("C-g"         . "<escape>"                 )
+    ;; for shuangpin user
+    ("M-<backspace>" . "<backspace><backspace>" )
+    ("<backspace>" . "<backspace>"              )
+    (?\C-?         . "<backspace>"              )
+    (?\s           . "<space>"                  )
+    ("<right>"     . "<right>"                  )
+    ("<up>"        . "<up>"                     )
+    ("<down>"      . "<down>"                   )
+    ("C-p"         . "<up>"                     )
+    ("C-n"         . "<down>"                   )
+    ("<prior>"     . "<prior>"                  )
+    ("<next>"      . "<next>"                   )
+    ("C-b"         . "<prior>"                  )
+    ("C-f"         . "<next>"                   )
+    ("C-k"         . "S-<delete>"               )
+    ("<end>"       . "<end>"                    )
+    ("C-a"         . "<home>"                   )
+    ("C-e"         . "<end>"                    )
+    ("<tab>"       . "<tab>"                    ))
   "Keymap for custom keybindings in Rimel.
 Both KEY and VALUE must be strings in the format returned by
 \\[describe-key] (=describe-key').  This matches the format used
@@ -112,28 +113,6 @@ Examples:
     \"C-M-<return>\""
   :type '(repeat (cons (sexp :tag "Emacs key")
                        (string :tag "Rime key")))
-  :group 'rimel)
-
-(defcustom rimel-confirm-keys '(?\s)
-  "Keys to confirm (select) the first candidate.
-Sent to rime as-is; rime typically treats space as confirm."
-  :type '(repeat sexp)
-  :group 'rimel)
-
-(defcustom rimel-commit-raw-keys '(return ?\r)
-  "Keys to commit raw input (English) during composition.
-Behavior is controlled by `rimel-return-behavior'."
-  :type '(repeat sexp)
-  :group 'rimel)
-
-(defcustom rimel-backspace-keys '(backspace ?\C-? 127)
-  "Keys for deleting the last input character during composition."
-  :type '(repeat sexp)
-  :group 'rimel)
-
-(defcustom rimel-cancel-keys '(escape ?\C-g)
-  "Keys to cancel composition and discard all input."
-  :type '(repeat sexp)
   :group 'rimel)
 
 (defcustom rimel-select-label-keys '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9)
@@ -406,27 +385,12 @@ Includes lowercase letters and common Chinese punctuation marks."
 Works for both character (integer) and symbol events."
   (memq event keys))
 
-(defun rimel--feed-key (key &optional mask)
-  "Send KEY to liberime for processing.  Return non-nil if handled.
-MASK is an optional modifier mask to apply to the key."
-  (if mask
-      (liberime-process-key key mask)
-    (liberime-process-key key)))
-
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
   (let ((commit (liberime-get-commit)))
     (when (and commit (not (string-equal commit "")))
       commit)))
 
-(defun rimel--commit-raw ()
-  "Commit raw English input or preview based on `rimel-return-behavior'."
-  (let ((result (pcase rimel-return-behavior
-                  ('raw (liberime-get-input))
-                  ('preview (let* ((ctx (liberime-get-context)))
-                              (alist-get 'commit-text-preview ctx))))))
-    (liberime-clear-composition)
-    (or result "")))
 
 (defun rimel--select-candidate (idx)
   "Select candidate at IDX (0-based).  Return committed text or nil."
@@ -531,29 +495,6 @@ Return list of characters to insert, or nil."
                 (when-let* ((pos (cl-position event rimel-select-label-keys))
                             (commit (rimel--select-candidate pos)))
                   (setq result commit continue nil)))
-
-               ;; Confirm key (space etc.) - send to rime
-               ((rimel--event-in-p event rimel-confirm-keys)
-                (when-let* ((commit (rimel--feed-key-and-check
-                                     (if (integerp event) event ?\s))))
-                  (setq result commit continue nil)))
-
-               ;; Commit raw input (enter etc.)
-               ((rimel--event-in-p event rimel-commit-raw-keys)
-                (setq result (rimel--commit-raw) continue nil))
-
-               ;; Backspace - delete last character
-               ((rimel--event-in-p event rimel-backspace-keys)
-                (liberime-process-key #xff08) ;backspace
-                (let ((input (liberime-get-input)))
-                  (if (or (null input) (string-equal input ""))
-                      (setq continue nil)
-                    (rimel--update-display))))
-
-               ;; Cancel composition (escape etc.)
-               ((rimel--event-in-p event rimel-cancel-keys)
-                (liberime-clear-composition)
-                (setq continue nil))
 
                ;; Key mapping via rimel-keymap
                ((when-let* ((pair (cl-find event rimel-keymap
