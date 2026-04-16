@@ -2,8 +2,8 @@
 
 ;; Author: jixiuf
 ;; URL: https://github.com/jixiuf/rimel
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.4") (liberime "0.0.6"))
+;; Version: 0.1.1
+;; Package-Requires: ((emacs "29.4") (liberime "0.0.7"))
 ;; Keywords: convenience, Chinese, input-method, rime
 
 ;; This program is free software; you can redistribute it and/or modify
