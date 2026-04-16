@@ -56,6 +56,34 @@ jobs:
             --eval "(setq byte-compile-error-on-warn t)" \
             -f batch-byte-compile \
             rimel.el
+      - name: Create liberime package for lint
+        run: |
+          mkdir -p ~/.emacs.d/elpa/liberime-0.0.6
+          cat > ~/.emacs.d/elpa/liberime-0.0.6/liberime-pkg.el << 'PKG'
+          (define-package "liberime" "0.0.6" "Rime for Emacs" '((emacs "26.1")))
+          PKG
+
+      - name: Install package-lint
+        run: |
+          emacs --batch -Q \
+            --eval "(add-to-list 'package-directory-list \"~/.emacs.d/elpa\")" \
+            --eval "(push \"~/.emacs.d/elpa/liberime-0.0.6\" package-directory-list)" \
+            --eval "(setq package-archives '((\"melpa\" . \"https://melpa.org/packages/\")))" \
+            --eval "(package-initialize)" \
+            --eval "(package-refresh-contents)" \
+            --eval "(package-install 'package-lint)"
+
+      - name: Lint
+        run: |
+          emacs --batch -Q \
+            -L . \
+            -L ~/.emacs.d/elpa/liberime-0.0.6 \
+            --eval "(add-to-list 'package-directory-list \"~/.emacs.d/elpa\")" \
+            --eval "(push \"~/.emacs.d/elpa/liberime-0.0.6\" package-directory-list)" \
+            --eval "(package-initialize)" \
+            --eval "(require 'package-lint)" \
+            -f package-lint-batch-and-exit \
+            rimel.el
 
   test:
     runs-on: ubuntu-latest

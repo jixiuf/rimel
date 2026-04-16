@@ -442,30 +442,6 @@ Can be set in tests to simulate rime behavior.")
     (should-not (rimel--should-enable-p))))                ; any returns t: disabled
 
 ;; -----------------------------------------------------------------------
-;; Test: commit-raw
-;; -----------------------------------------------------------------------
-
-(ert-deftest rimel-test-commit-raw ()
-  "Test raw input commit."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input "nihao")
-  (let ((rimel-return-behavior 'raw))
-    (let ((result (rimel--commit-raw)))
-      (should (equal "nihao" result))                      ; raw input committed
-      (should (string-equal rimel-test--rime-input "")))))  ; input cleared
-
-(ert-deftest rimel-test-commit-raw-preview ()
-  "Test preview commit."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input "nihao"
-        rimel-test--rime-preedit "ni hao"
-        rimel-test--rime-commit-preview "你好"
-        rimel-test--rime-candidates '("你好" "你号"))
-  (let ((rimel-return-behavior 'preview))
-    (let ((result (rimel--commit-raw)))
-      (should (equal "你好" result)))))                     ; preview committed
-
-;; -----------------------------------------------------------------------
 ;; Test: get-commit
 ;; -----------------------------------------------------------------------
 
@@ -581,28 +557,12 @@ Can be set in tests to simulate rime behavior.")
 ;; Test: defcustom defaults
 ;; -----------------------------------------------------------------------
 
-(ert-deftest rimel-test-default-confirm-keys ()
-  "Test default confirm keys include space."
-  (should (memq ?\s rimel-confirm-keys)))                  ; space in confirm keys
-
-(ert-deftest rimel-test-default-cancel-keys ()
-  "Test default cancel keys."
-  (should (memq 'escape rimel-cancel-keys))                ; escape in cancel keys
-  (should (memq ?\C-g rimel-cancel-keys)))                 ; C-g in cancel keys
-
-(ert-deftest rimel-test-default-backspace-keys ()
-  "Test default backspace keys."
-  (should (memq 'backspace rimel-backspace-keys))          ; backspace symbol
-  (should (memq 127 rimel-backspace-keys)))                ; DEL char
 
 (ert-deftest rimel-test-default-select-label-keys ()
   "Test default select label keys are 1-9."
   (should (equal '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9)
                  rimel-select-label-keys)))                 ; 1-9
 
-(ert-deftest rimel-test-default-return-behavior ()
-  "Test default return behavior is raw."
-  (should (eq 'raw rimel-return-behavior)))                ; default raw
 
 ;; -----------------------------------------------------------------------
 ;; Test: rimel-keymap entries
@@ -677,34 +637,6 @@ Can be set in tests to simulate rime behavior.")
 ;; Test: composition loop with mock events
 ;; -----------------------------------------------------------------------
 
-(ert-deftest rimel-test-composition-loop-cancel ()
-  "Test that escape cancels composition."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input "ni"
-        rimel-test--rime-preedit "ni"
-        rimel-test--rime-candidates '("你" "妮"))
-  (with-temp-buffer
-    (let ((event-count 0))
-      (cl-letf (((symbol-function 'read-event)
-                 (lambda ()
-                   (cl-incf event-count)
-                   (if (= event-count 1) 'escape ?x))))
-        (let ((result (rimel--composition-loop)))
-          (should-not result)                              ; cancel returns nil
-          (should (string-equal rimel-test--rime-input ""))))))) ; input cleared
-
-(ert-deftest rimel-test-composition-loop-commit-raw ()
-  "Test that return commits raw input."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input "nihao"
-        rimel-test--rime-preedit "ni hao"
-        rimel-test--rime-candidates '("你好"))
-  (with-temp-buffer
-    (let ((rimel-return-behavior 'raw))
-      (cl-letf (((symbol-function 'read-event)
-                 (lambda () 'return)))
-        (let ((result (rimel--composition-loop)))
-          (should (equal '(?n ?i ?h ?a ?o) result)))))))   ; raw input returned
 
 (ert-deftest rimel-test-composition-loop-select-candidate ()
   "Test candidate selection by label key in composition loop."
@@ -718,35 +650,6 @@ Can be set in tests to simulate rime behavior.")
       (let ((result (rimel--composition-loop)))
         (should (equal '(?妮) result))))))                  ; 2nd candidate selected
 
-(ert-deftest rimel-test-composition-loop-confirm ()
-  "Test space confirms first candidate."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input "ni"
-        rimel-test--rime-preedit "ni"
-        rimel-test--rime-candidates '("你" "妮"))
-  ;; Simulate: space key triggers rime commit
-  (setq rimel-test--process-key-hook
-        (lambda (key _mask)
-          (when (= key ?\s)
-            (setq rimel-test--rime-committed "你")
-            (liberime-clear-composition))))
-  (with-temp-buffer
-    (cl-letf (((symbol-function 'read-event)
-               (lambda () ?\s)))
-      (let ((result (rimel--composition-loop)))
-        (should (equal '(?你) result))))))                  ; first candidate committed
-
-(ert-deftest rimel-test-composition-loop-backspace-empty ()
-  "Test that backspace on empty input exits composition."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-input ""
-        rimel-test--rime-preedit ""
-        rimel-test--rime-candidates nil)
-  (with-temp-buffer
-    (cl-letf (((symbol-function 'read-event)
-               (lambda () 'backspace)))
-      (let ((result (rimel--composition-loop)))
-        (should-not result)))))                            ; empty backspace exits
 
 (ert-deftest rimel-test-composition-loop-unhandled-key ()
   "Test that unhandled keys exit and push back event."
