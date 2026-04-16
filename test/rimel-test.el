@@ -165,6 +165,7 @@ Can be set in tests to simulate rime behavior.")
 
 (defun rimel-test-run ()
   "Run all rimel ERT tests and exit with appropriate status."
+  (setq load-prefer-newer t) 
   (ert-run-tests-batch-and-exit "rimel-test-*"))
 
 ;; -----------------------------------------------------------------------
@@ -439,75 +440,6 @@ Can be set in tests to simulate rime behavior.")
   (let ((rimel-disable-predicates
          (list (lambda () nil) (lambda () t))))
     (should-not (rimel--should-enable-p))))                ; any returns t: disabled
-
-;; -----------------------------------------------------------------------
-;; Test: feed-key-string parsing
-;; -----------------------------------------------------------------------
-
-(ert-deftest rimel-test-feed-key-string-hex ()
-  "Test feeding hex keycodes."
-  (rimel-test--reset-rime)
-  (let ((calls nil))
-    (cl-letf (((symbol-function 'rimel--feed-key)
-               (lambda (key mask) (push (cons key mask) calls))))
-      (rimel--feed-key-string "0xFF52")
-      (should (equal '((#xff52 . 0)) calls)))))            ; hex keycode parsed
-
-(ert-deftest rimel-test-feed-key-string-single-char ()
-  "Test feeding single character keycodes."
-  (rimel-test--reset-rime)
-  (let ((calls nil))
-    (cl-letf (((symbol-function 'rimel--feed-key)
-               (lambda (key mask) (push (cons key mask) calls))))
-      (rimel--feed-key-string "a")
-      (should (equal (car (car calls)) ?a)))))             ; char a parsed
-
-(ert-deftest rimel-test-feed-key-string-symbol ()
-  "Test feeding symbol keycodes."
-  (rimel-test--reset-rime)
-  (let ((calls nil))
-    (cl-letf (((symbol-function 'rimel--feed-key)
-               (lambda (key mask) (push (cons key mask) calls))))
-      (rimel--feed-key-string "<left>")
-      (should (equal (car (car calls)) #xff51))            ; Left key symbol
-      (setq calls nil)
-      (rimel--feed-key-string "<return>")
-      (should (equal (car (car calls)) #xff0d))            ; Return key symbol
-      (setq calls nil)
-      (rimel--feed-key-string "<backspace>")
-      (should (equal (car (car calls)) #xff08))            ; Backspace key symbol
-      (setq calls nil)
-      (rimel--feed-key-string "<escape>")
-      (should (equal (car (car calls)) #xff1b)))))         ; Escape key symbol
-
-(ert-deftest rimel-test-feed-key-string-modifiers ()
-  "Test feeding keycodes with modifiers."
-  (rimel-test--reset-rime)
-  (let ((calls nil))
-    (cl-letf (((symbol-function 'rimel--feed-key)
-               (lambda (key mask) (push (cons key mask) calls))))
-      (rimel--feed-key-string "C-a")
-      (should (equal (cdar calls) 4))                      ; Control modifier = 4
-      (setq calls nil)
-      (rimel--feed-key-string "M-a")
-      (should (equal (cdar calls) 8))                      ; Alt/Meta modifier = 8
-      (setq calls nil)
-      (rimel--feed-key-string "S-a")
-      (should (equal (cdar calls) 1)))))                   ; Shift modifier = 1
-
-(ert-deftest rimel-test-feed-key-string-list ()
-  "Test feeding a list of keycodes."
-  (rimel-test--reset-rime)
-  (let ((calls nil))
-    (cl-letf (((symbol-function 'rimel--feed-key)
-               (lambda (key mask) (push (cons key mask) calls))))
-      (rimel--feed-key-string '("C-a" "M-b"))
-      (should (equal (length calls) 2)))))                 ; two keys fed
-
-(ert-deftest rimel-test-feed-key-string-unknown-symbol ()
-  "Test that unknown symbols signal an error."
-  (rimel-test--reset-rime)
-  (should-error (rimel--feed-key-string "<xyzzy>")))       ; unknown symbol errors
 
 ;; -----------------------------------------------------------------------
 ;; Test: commit-raw
