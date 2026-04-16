@@ -8,6 +8,8 @@ all: byte-compile lint test
 
 byte-compile: $(ELC)
 
+%.elc: %.el
+	$(EMACS) --batch  -Q -L ./test  -L . -l ./test/liberime-stub.el --eval "(setq byte-compile-error-on-warn t)" -f batch-byte-compile $<
 test:
 	emacs --batch -Q -L . -L test \
 	  -l ert \
