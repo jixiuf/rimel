@@ -163,7 +163,7 @@ Example:
   :group 'rimel)
 
 (defface rimel-preedit-face
-  '((t (:underline t :inherit font-lock-builtin-face)))
+  '((t (:inherit font-lock-builtin-face)))
   "Face for the inline preedit string."
   :group 'rimel)
 
