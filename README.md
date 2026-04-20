@@ -1,4 +1,4 @@
-# Rimel — 基于 liberime 的轻量级 Emacs Rime 输入法
+# Rimel — 基于 liberime 的轻量级 Emacs Rime 输入法[![MELPA](https://melpa.org/packages/rimel-badge.svg)](https://melpa.org/#/rimel)
 
 Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](https://github.com/merrickluo/liberime) 动态模块，
 使用 Emacs 内置的 `input-method-function` 接口和 `read-event` 循环（与 quail 相同的模式）。
@@ -25,7 +25,8 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 
 ### 配置
 
-```elisp
+```elisp 
+;; 如果通过 melpa 等方式 安装的，应该不需要此部分
 (add-to-list 'load-path "/path/to/rimel")
 (add-to-list 'load-path "/path/to/liberime")
 
