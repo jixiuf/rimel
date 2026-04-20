@@ -248,7 +248,7 @@ _NAME is the input method name (unused)."
   "Display PREEDIT string as overlay at point."
   (rimel--clear-preedit)
   (when (and preedit (not (string-equal preedit "")))
-    (let* ((pos (if (> (point) (point-min)) (1- (point)) (point)))
+    (let* ((pos (if (bobp)  (point) (1- (point))))
            (surrounding-face (plist-get (text-properties-at pos) 'face))
            ;; When there is text after point, after-string inherits
            ;; surrounding face automatically -- only use rimel-preedit-face
@@ -472,7 +472,7 @@ This function serves as `input-method-function'."
   (liberime-process-key key)
   (rimel--check-commit))
 
-(defun rimel--get-key(pair)
+(defun rimel--get-key (pair)
   "Get key from PAIR for `liberime-process-keys'."
   (let ((key (car pair)))
     (cond
@@ -552,7 +552,7 @@ Only active in `prog-mode' derived buffers."
 (defun rimel-predicate-after-alphabet-char-p ()
   "Return non-nil when the char before point is a Latin letter.
 Useful for continuing English words without switching."
-  (and (> (point) (point-min))
+  (and (not (bobp))
        (let ((ch (char-before)))
          (and ch
               (or (and (>= ch ?a) (<= ch ?z))
@@ -562,7 +562,7 @@ Useful for continuing English words without switching."
   "Return non-nil when the char before point is an ASCII char.
 Broader than `rimel-predicate-after-alphabet-char-p' — includes
 digits and punctuation."
-  (and (> (point) (point-min))
+  (and (not (bobp))
        (let ((ch (char-before)))
          (and ch (>= ch #x21) (<= ch #x7e)))))
 
@@ -615,7 +615,7 @@ to detecting $ and \\ prefixes."
   (when (derived-mode-p 'tex-mode 'latex-mode 'TeX-mode 'LaTeX-mode)
     (or (and (fboundp 'texmathp) (texmathp))
         ;; Fallback: check for $ or \ before point
-        (and (> (point) (point-min))
+        (and (not (bobp))
              (let ((ch (char-before)))
                (or (eq ch ?$) (eq ch ?\\)))))))
 
