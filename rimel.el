@@ -473,7 +473,7 @@ This function serves as `input-method-function'."
   (rimel--check-commit))
 
 (defun rimel--get-key (pair)
-  "Get key from PAIR for `liberime-process-keys'."
+  "Get key from PAIR for `liberime-process-key'."
   (let ((key (car pair)))
     (cond
      ((numberp key)
@@ -512,7 +512,7 @@ Return list of characters to insert, or nil."
                                            :key #'rimel--get-key
                                            :test #'equal))
                             (rime-keycode (cdr pair)))
-                  (liberime-process-keys (kbd rime-keycode))
+                  (liberime-process-key (kbd rime-keycode))
                   (when-let* ((commit (rimel--check-commit)))
                     (setq result commit continue nil))
                   t))
