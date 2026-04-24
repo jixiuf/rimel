@@ -87,6 +87,7 @@ set to \='candidate to inline candidate"
                  (const :tag "Disable inline preedit" nil))
   :group 'rimel)
 
+
 (defcustom rimel-keymap
   '(("<home>"        . "<home>"                   )
     ("<left>"        . "<left>"                   )
@@ -442,7 +443,7 @@ This function serves as `input-method-function'."
       (if commit
           (string-to-list commit)
         ;; Enter composition loop
-        (rimel--composition-loop)))))
+        (rimel--composition-loop))))) 
 
 (defun rimel--update-display ()
   "Update preedit overlay and echo area candidates from current rime state."
@@ -493,7 +494,7 @@ Return list of characters to insert, or nil."
         (progn
           (rimel--update-display)
           ;; Event loop
-          (while continue
+          (while (and continue (not (string-empty-p (liberime-get-input))))
             (let ((event (read-event)))
               (cond
                ;; Letter keys - continue composition
