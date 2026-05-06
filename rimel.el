@@ -56,6 +56,29 @@
 (declare-function posframe-show "ext:posframe")
 (declare-function posframe-hide "ext:posframe")
 
+(defvar quail-keyboard-layout-alist)
+
+;;; Keyboard layout translation
+;; Mimics quail's `quail-set-keyboard-layout' so that rimel can translate
+;; keys from a non-QWERTY physical layout (e.g., programmer-dvorak) back
+;; to standard QWERTY before sending them to the rime engine.  This lets
+;; rime schemas (designed for QWERTY) work regardless of the OS keyboard
+;; layout.
+
+(defconst rimel--keyboard-layout-standard
+  "\
+                              \
+  1!2@3#4$5%6^7&8*9(0)-_=+`~  \
+  qQwWeErRtTyYuUiIoOpP[{]}    \
+  aAsSdDfFgGhHjJkKlL;:'\"\\|    \
+  zZxXcCvVbBnNmM,<.>/?        \
+                              "
+  "Standard QWERTY keyboard layout that rimel assumes.
+Same format as `quail-keyboard-layout-standard'.")
+
+(defconst rimel--keyboard-layout-len 180
+  "Length of the keyboard layout string.")
+
 ;;; Customization
 
 (defgroup rimel nil
@@ -210,6 +233,21 @@ See =posframe-show= for supported values."
   :type '(plist)
   :group 'rimel)
 
+(defcustom rimel-keyboard-layout nil
+  "Keyboard layout type for translating keys to standard QWERTY.
+When non-nil, rimel translates typed keys from this layout back to
+standard QWERTY before sending them to the rime engine.  This lets
+rime schemas (e.g., wubi, pinyin) designed for QWERTY work
+correctly with non-QWERTY OS keyboard layouts like
+programmer-dvorak.
+
+Available layout types are listed in `quail-keyboard-layout-alist'.
+You can either set this variable directly or use the interactive
+function `rimel-set-keyboard-layout'."
+  :type '(choice (const :tag "No translation" nil)
+                 string)
+  :group 'rimel)
+
 ;;; Internal variables
 
 (defvar rimel--preedit-overlay nil
@@ -221,6 +259,13 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
 
 (defvar rimel--posframe-buffer " *rimel-posframe*"
   "Buffer name for posframe candidate display.")
+
+(defvar rimel--keyboard-layout-string nil
+  "The keyboard layout string for key translation, or nil if unset.")
+
+(defvar rimel--keyboard-layout-substitution nil
+  "Alist mapping extra key positions to missing positions.
+Updated automatically by `rimel-set-keyboard-layout'.")
 
 
 ;;; Activation / Deactivation
@@ -379,6 +424,69 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
   (rimel--clear-preedit)
   (rimel--hide-candidates))
 
+;;; Keyboard layout remapping
+
+;;;###autoload
+(defun rimel-set-keyboard-layout (kbd-type)
+  "Set the keyboard layout for rimel key translation.
+KBD-TYPE is a key in `quail-keyboard-layout-alist' (e.g.,
+\"programmer-dvorak\", \"dvorak\", \"pc105-uk\").  After setting,
+rimel translates keys from this layout to standard QWERTY before
+sending them to the rime engine, so that rime schemas designed
+for QWERTY work correctly."
+  (interactive
+   (progn
+     (require 'quail)
+     (let* ((completion-ignore-case t)
+            (type (completing-read "Keyboard type: "
+                                   quail-keyboard-layout-alist)))
+       (list type))))
+  (require 'quail)
+  (rimel--update-keyboard-layout kbd-type)
+  (setq rimel-keyboard-layout kbd-type))
+
+(defun rimel--update-keyboard-layout (kbd-type)
+  "Build the translation table for keyboard layout KBD-TYPE."
+  (let ((layout (assoc kbd-type quail-keyboard-layout-alist)))
+    (when (null layout)
+      (error "Unknown keyboard type `%s'" kbd-type))
+    (setq rimel--keyboard-layout-string (cdr layout))
+    (let ((i rimel--keyboard-layout-len)
+          subst-list missing-list)
+      (while (> i 0)
+        (setq i (1- i))
+        (if (= (aref rimel--keyboard-layout-string i) ?\s)
+            (when (/= (aref rimel--keyboard-layout-standard i) ?\s)
+              (setq missing-list (cons i missing-list)))
+          (when (= (aref rimel--keyboard-layout-standard i) ?\s)
+            (setq subst-list (cons (cons i nil) subst-list)))))
+      (setq rimel--keyboard-layout-substitution subst-list)
+      (dolist (missing missing-list)
+        (while (and subst-list (cdr (car subst-list)))
+          (setq subst-list (cdr subst-list)))
+        (when subst-list
+          (setcdr (car subst-list) missing))))))
+
+(defun rimel--keyboard-translate (char)
+  "Translate CHAR from the user's keyboard layout to standard QWERTY.
+Returns CHAR unchanged if no keyboard layout is set or if CHAR is
+not found in the layout string."
+  (if (or (null rimel--keyboard-layout-string)
+          (not (integerp char)))
+      char
+    (let ((i 0))
+      (while (and (< i rimel--keyboard-layout-len)
+                  (/= char (aref rimel--keyboard-layout-string i)))
+        (setq i (1+ i)))
+      (if (= i rimel--keyboard-layout-len)
+          char
+        (let ((ch (aref rimel--keyboard-layout-standard i)))
+          (if (= ch ?\s)
+              (if-let* ((sub (cdr (assq i rimel--keyboard-layout-substitution))))
+                  (aref rimel--keyboard-layout-standard sub)
+                char)
+            ch))))))
+
 ;;; Core input method
 
 (defun rimel--composable-key-p (key)
@@ -419,31 +527,32 @@ Works for both character (integer) and symbol events."
   "Process KEY through rimel input method.
 This function serves as `input-method-function'."
   (setq rimel--current-input-key key)
-  ;; form quail-input-method
-  (if (or (and (or buffer-read-only
-                   (and (get-char-property (point) 'read-only)
-                        (get-char-property (point) 'front-sticky)))
-	           (not (or inhibit-read-only
-			            (get-char-property (point) 'inhibit-read-only))))
-          (not (rimel--composable-key-p key))
-          (not (rimel--should-enable-p))
-          ;; When an overriding keymap is active (e.g., `set-transient-map'
-          ;; used by spatial-window, avy, etc.), pass the key through if
-          ;; it has a binding there.  This matches quail's behavior per
-          ;; Emacs bug#68338.
-          (and overriding-terminal-local-map
-               (lookup-key overriding-terminal-local-map (vector key)))
-          overriding-local-map)
-      (list key)
-    ;; Start composition
-    (liberime-clear-composition)
-    (liberime-process-key key)
-    ;; Check immediate commit (e.g., rime auto-select)
-    (let ((commit (rimel--get-commit)))
-      (if commit
-          (string-to-list commit)
-        ;; Enter composition loop
-        (rimel--composition-loop))))) 
+  (let ((k (rimel--keyboard-translate key)))
+    ;; form quail-input-method
+    (if (or (and (or buffer-read-only
+                     (and (get-char-property (point) 'read-only)
+                          (get-char-property (point) 'front-sticky)))
+                 (not (or inhibit-read-only
+                          (get-char-property (point) 'inhibit-read-only))))
+            (not (rimel--composable-key-p k))
+            (not (rimel--should-enable-p))
+            ;; When an overriding keymap is active (e.g., `set-transient-map'
+            ;; used by spatial-window, avy, etc.), pass the key through if
+            ;; it has a binding there.  This matches quail's behavior per
+            ;; Emacs bug#68338.
+            (and overriding-terminal-local-map
+                 (lookup-key overriding-terminal-local-map (vector key)))
+            overriding-local-map)
+        (list key)
+      ;; Start composition
+      (liberime-clear-composition)
+      (liberime-process-key k)
+      ;; Check immediate commit (e.g., rime auto-select)
+      (let ((commit (rimel--get-commit)))
+        (if commit
+            (string-to-list commit)
+          ;; Enter composition loop
+          (rimel--composition-loop))))))
 
 (defun rimel--update-display ()
   "Update preedit overlay and echo area candidates from current rime state."
@@ -495,11 +604,12 @@ Return list of characters to insert, or nil."
           (rimel--update-display)
           ;; Event loop
           (while (and continue (not (string-empty-p (liberime-get-input))))
-            (let ((event (read-event)))
+            (let* ((event (read-event))
+                   (translated (rimel--keyboard-translate event)))
               (cond
                ;; Letter keys - continue composition
-               ((rimel--composable-key-p event)
-                (when-let* ((commit (rimel--feed-key-and-check event)))
+               ((rimel--composable-key-p translated)
+                (when-let* ((commit (rimel--feed-key-and-check translated)))
                   (setq result commit continue nil)))
 
                ;; Candidate selection by label key (1-9 etc.)
@@ -510,8 +620,8 @@ Return list of characters to insert, or nil."
 
                ;; Key mapping via rimel-keymap
                ((when-let* ((pair (cl-find event rimel-keymap
-                                           :key #'rimel--get-key
-                                           :test #'equal))
+                                            :key #'rimel--get-key
+                                            :test #'equal))
                             (rime-keycode (cdr pair)))
                   (liberime-process-keys (kbd rime-keycode))
                   (when-let* ((commit (rimel--check-commit)))
