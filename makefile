@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 
 EMACS ?= emacs
-ELC := rimel.elc
+ELC := rimel.elc rimel-quail.elc
 
 .PHONY: all build test test-all lint byte-compile clean
 all: byte-compile lint test
@@ -32,7 +32,7 @@ checkdoc:
 		              (checkdoc-proper-noun-list nil) \
 		              (checkdoc-verb-check-experimental-flag nil) \
 		              (ok t)) \
-		  (dolist (f '(\"rimel.el\")) \
+		  (dolist (f '(\"rimel.el\" \"rimel-quail.el\")) \
 		    (ignore-errors (kill-buffer \"*Warnings*\")) \
 		    (let ((inhibit-message t)) \
 		      (checkdoc-file f)) \
@@ -41,4 +41,3 @@ checkdoc:
 		      (with-current-buffer \"*Warnings*\" \
 		        (message \"%s\" (buffer-string))))) \
 		  (unless ok (kill-emacs 1)))"
-

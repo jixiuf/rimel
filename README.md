@@ -1,11 +1,12 @@
 # Rimel — 基于 liberime 的轻量级 Emacs Rime 输入法[![MELPA](https://melpa.org/packages/rimel-badge.svg)](https://melpa.org/#/rimel)
 
 Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](https://github.com/merrickluo/liberime) 动态模块，
-使用 Emacs 内置的 `input-method-function` 接口和 `read-event` 循环（与 quail 相同的模式）。
+使用 Emacs 内置的 `input-method-function` 接口和 `read-event` 循环。另提供 `rimel-quail`
+输入法，先经过 Emacs Quail 的输入事件转换，再交给 Rimel/Rime 处理。
 
 ## 特性
 
-- 📦 **单文件**：仅 `rimel.el` 一个文件，约 700 行
+- 📦 **轻量**：核心实现集中在 `rimel.el`，Quail 集成放在独立的懒加载文件中
 - 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
 - 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
@@ -39,6 +40,9 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 (require 'rimel)
 (setq default-input-method "rimel")
 
+;; 可选：使用 Quail 处理键盘布局、字符映射等输入事件转换
+;;(setq default-input-method "rimel-quail")
+
 ;; 可选：指定输入方案
 (setq rimel-schema "luna_pinyin_simp")
 
@@ -54,6 +58,21 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ;; 自定义 posframe 属性 (可选)
 (setq rimel-posframe-properties '(:left-fringe 10 :right-fringe 10))
 ```
+
+### Quail 输入事件转换
+
+`rimel-quail` 复用 Emacs 内置 Quail 处理 Rime 之前的输入事件转换。这不只适用于键盘布局，
+也适用于通过 Quail 包定义的字符映射等转换规则。非 QWERTY 布局可继续使用 Quail 配置：
+
+```elisp
+(require 'quail)
+(quail-set-keyboard-layout "pc105-uk")
+(setq default-input-method "rimel-quail")
+```
+
+可用布局来自 `quail-keyboard-layout-alist`。如果需要自定义布局，先把 180 字符布局字符串加入
+`quail-keyboard-layout-alist`，再调用 `quail-set-keyboard-layout`。如果只需要 Rimel 直接处理原始
+按键，继续使用 `rimel` 输入法即可。
 
 ## 按键说明
 

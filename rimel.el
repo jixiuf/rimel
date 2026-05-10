@@ -39,6 +39,9 @@
 ;; Usage:
 ;;   (require 'rimel)
 ;;   (set-input-method "rimel")
+;;
+;; The separate input method "rimel-quail" is a Quail package that reuses the
+;; Rimel/liberime processing helpers.
 
 ;;; Code:
 
@@ -56,8 +59,6 @@
 (declare-function liberime-current-schema "ext:liberime-core")
 (declare-function posframe-show "ext:posframe")
 (declare-function posframe-hide "ext:posframe")
-(declare-function quail-keyboard-translate "quail")
-(defvar quail-keyboard-layout-alist)
 
 ;;; Customization
 
@@ -213,26 +214,6 @@ See =posframe-show= for supported values."
   :type '(plist)
   :group 'rimel)
 
-(defcustom rimel-keyboard-layout nil
-  "Keyboard layout type for translating keys before rime processing.
-When non-nil, rimel translates typed keys using Quail's
-`quail-keyboard-translate' before sending them to the rime
-engine.  This allows rime schemas (e.g., wubi, pinyin) to work
-correctly with non-QWERTY OS keyboard layouts like
-programmer-dvorak.
-
-Available layout types are listed in `quail-keyboard-layout-alist'.
-You can either set this variable directly or use the interactive
-function `rimel-set-keyboard-layout'."
-  :type '(choice (const :tag "No translation" nil)
-                 string)
-  :set (lambda (sym val)
-         (set-default sym val)
-         (when val
-           (require 'quail)
-           (quail-set-keyboard-layout val)))
-  :group 'rimel)
-
 ;;; Internal variables
 
 (defvar rimel--preedit-overlay nil
@@ -245,20 +226,25 @@ Available for use by predicate functions in `rimel-disable-predicates'.")
 (defvar rimel--posframe-buffer " *rimel-posframe*"
   "Buffer name for posframe candidate display.")
 
+(defconst rimel--title
+  (if (char-displayable-p 12563) (char-to-string 12563) "中")
+  "Mode-line title for Rimel input methods.")
 
 ;;; Activation / Deactivation
+
+(defun rimel--activate-common ()
+  "Prepare liberime state for Rimel input methods."
+  (unless (liberime-workable-p)
+    (liberime-load))
+  (when (and rimel-schema (liberime-workable-p))
+    (liberime-try-select-schema rimel-schema)))
 
 ;;;###autoload
 (defun rimel-activate (_name)
   "Activate rimel input method.
 Called by Emacs when user selects the \"rimel\" input method.
 _NAME is the input method name (unused)."
-  (unless (liberime-workable-p)
-    (liberime-load))
-  (when (and rimel-schema
-             (liberime-workable-p)
-             (not (string= rimel-schema (liberime-current-schema))))
-    (liberime-try-select-schema rimel-schema))
+  (rimel--activate-common)
   (setq-local input-method-function #'rimel-input-method)
   (setq-local deactivate-current-input-method-function #'rimel-deactivate))
 
@@ -352,15 +338,18 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 
 ;; Echo area backend
 
+(defun rimel--echo-area-content (context)
+  "Return echo area candidate display text for CONTEXT."
+  (rimel--format-candidates
+   context " " (eq rimel-inline-preedit 'candidate)))
+
 (defun rimel--echo-area-show (context)
   "Display candidates from CONTEXT in the echo area."
-  (let ((content (rimel--format-candidates
-                  context " " (eq rimel-inline-preedit 'candidate))))
+  (let ((content (rimel--echo-area-content context)))
     (when content
       (let ((message-log-max nil))
         (message "%s" content)))))
 
-;; Posframe backend
 (defun rimel--at-screen-bottom-p ()
   "At screen bottom or not."
   (let* ((current-line (count-screen-lines (window-start) (point)))
@@ -369,32 +358,29 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 
 (defun rimel--posframe-show (context)
   "Display candidates from CONTEXT in a posframe near cursor."
-  (if (not (require 'posframe nil t))
-      (rimel--echo-area-show context)
-    (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
-           (content (rimel--format-candidates
-                     context sep (eq rimel-inline-preedit 'candidate))))
-      (if (not content)
-          (rimel--posframe-hide)
-        (apply #'posframe-show
-         rimel--posframe-buffer
-         :string content
-         :x-pixel-offset 2
-         ;; for TUI emacs
-         :y-pixel-offset (if (rimel--at-screen-bottom-p) -3 1)
-         :position (point)
-         :background-color (face-background 'rimel-posframe-face nil t)
-         :foreground-color (face-foreground 'rimel-posframe-face nil t)
-         :border-width 1
-         :border-color (face-background 'rimel-posframe-border-face nil t)
-         :min-width rimel-posframe-min-width
-         :timeout nil
-         rimel-posframe-properties)))))
+  (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
+         (content (rimel--format-candidates
+                   context sep (eq rimel-inline-preedit 'candidate))))
+    (if (not content)
+        (rimel--posframe-hide)
+      (apply #'posframe-show
+       rimel--posframe-buffer
+       :string content
+       :x-pixel-offset 2
+       ;; for TUI emacs
+       :y-pixel-offset (if (rimel--at-screen-bottom-p) -3 1)
+       :position (point)
+       :background-color (face-background 'rimel-posframe-face nil t)
+       :foreground-color (face-foreground 'rimel-posframe-face nil t)
+       :border-width 1
+       :border-color (face-background 'rimel-posframe-border-face nil t)
+       :min-width rimel-posframe-min-width
+       :timeout nil
+       rimel-posframe-properties))))
 
 (defun rimel--posframe-hide ()
   "Hide the posframe candidate display."
-  (when (require 'posframe nil t)
-    (posframe-hide rimel--posframe-buffer)))
+  (posframe-hide rimel--posframe-buffer))
 
 ;;; State management
 
@@ -404,48 +390,38 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
   (rimel--clear-preedit)
   (rimel--hide-candidates))
 
-;;; Keyboard layout remapping
-
-;;;###autoload
-(defun rimel-set-keyboard-layout (kbd-type)
-  "Set the keyboard layout for rimel key translation.
-KBD-TYPE is a key in `quail-keyboard-layout-alist' (e.g.,
-\"programmer-dvorak\", \"dvorak\", \"pc105-uk\").  After setting,
-rimel translates keys from this layout before sending them to
-the rime engine."
-  (interactive
-   (progn
-     (require 'quail)
-     (let* ((completion-ignore-case t)
-            (type (completing-read "Keyboard type: "
-                                   quail-keyboard-layout-alist)))
-       (list type))))
-  (require 'quail)
-  (quail-set-keyboard-layout kbd-type)
-  (setq rimel-keyboard-layout kbd-type))
-
-(defun rimel--keyboard-translate (char)
-  "Translate CHAR using the current keyboard layout.
-If `rimel-keyboard-layout' is nil, return CHAR unchanged.
-Otherwise delegate to `quail-keyboard-translate'."
-  (if (or (null rimel-keyboard-layout)
-          (not (integerp char)))
-      char
-    (require 'quail)
-    (quail-keyboard-translate char)))
+(defun rimel--update-preedit (context)
+  "Update preedit overlay from CONTEXT."
+  (cond
+   ((eq rimel-inline-preedit 'candidate)
+    (rimel--show-preedit (alist-get 'commit-text-preview context)))
+   ((eq rimel-inline-preedit t)
+    (rimel--show-preedit
+     (alist-get 'preedit (alist-get 'composition context))))))
 
 ;;; Core input method
+
+(defconst rimel--composable-punctuation-keys
+  '(?+ ?= ?- ?_ ?\( ?\) ?* ?& ?^ ?% ?$ ?# ?@ ?! ?` ?~
+       ?\[ ?\] ?{ ?} ?\\ ?|
+       ?\: ?\; ?\' ?\"
+       ?, ?. ?< ?> ?\? ?/
+       ?\, ?。 ?… ?— ?· ?～ ?、)
+  "Punctuation keys that can start or continue a Rime composition.")
+
+(defconst rimel--composable-letter-keys
+  (number-sequence ?a ?z)
+  "Letter keys that can start or continue a Rime composition.")
+
+(defconst rimel--composable-keys
+  (delete-dups (append rimel--composable-letter-keys
+                       rimel--composable-punctuation-keys))
+  "Keys that can start or continue a Rime composition.")
 
 (defun rimel--composable-key-p (key)
   "Return non-nil if KEY should start a rime composition.
 Includes lowercase letters and common Chinese punctuation marks."
-  (and (integerp key)
-       (or (and (>= key ?a) (<= key ?z))
-           (memq key '(?+ ?= ?- ?_ ?\( ?\) ?* ?& ?^ ?% ?$ ?# ?@ ?! ?` ?~
-                          ?\[ ?\]  ?{  ?}  ?\\  ?|
-                          ?\: ?\; ?\'  ?\"
-                          ?, ?. ?<  ?>   ?\? ?/
-                          ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
+  (and (integerp key) (memq key rimel--composable-keys)))
 
 (defun rimel--event-in-p (event keys)
   "Return non-nil if EVENT is a member of KEYS list.
@@ -474,41 +450,35 @@ Works for both character (integer) and symbol events."
   "Process KEY through rimel input method.
 This function serves as `input-method-function'."
   (setq rimel--current-input-key key)
-  (let ((k (rimel--keyboard-translate key)))
-    ;; form quail-input-method
-    (if (or (and (or buffer-read-only
-                     (and (get-char-property (point) 'read-only)
-                          (get-char-property (point) 'front-sticky)))
-                 (not (or inhibit-read-only
-                          (get-char-property (point) 'inhibit-read-only))))
-            (not (rimel--composable-key-p k))
-            (not (rimel--should-enable-p))
-            ;; When an overriding keymap is active (e.g., `set-transient-map'
-            ;; used by spatial-window, avy, etc.), pass the key through if
-            ;; it has a binding there.  This matches quail's behavior per
-            ;; Emacs bug#68338.
-            (and overriding-terminal-local-map
-                 (lookup-key overriding-terminal-local-map (vector key)))
-            overriding-local-map)
-        (list key)
-      ;; Start composition
-      (liberime-clear-composition)
-      (liberime-process-key k)
-      ;; Check immediate commit (e.g., rime auto-select)
-      (let ((commit (rimel--get-commit)))
-        (if commit
-            (string-to-list commit)
-          ;; Enter composition loop
-          (rimel--composition-loop))))))
+  (if (or (and (or buffer-read-only
+                   (and (get-char-property (point) 'read-only)
+                        (get-char-property (point) 'front-sticky)))
+               (not (or inhibit-read-only
+                        (get-char-property (point) 'inhibit-read-only))))
+          (not (rimel--composable-key-p key))
+          (not (rimel--should-enable-p))
+          ;; When an overriding keymap is active (e.g., `set-transient-map'
+          ;; used by spatial-window, avy, etc.), pass the key through if
+          ;; it has a binding there.  This matches quail's behavior per
+          ;; Emacs bug#68338.
+          (and overriding-terminal-local-map
+               (lookup-key overriding-terminal-local-map (vector key)))
+          overriding-local-map)
+      (list key)
+    ;; Start composition
+    (liberime-clear-composition)
+    (liberime-process-key key)
+    ;; Check immediate commit (e.g., rime auto-select)
+    (let ((commit (rimel--get-commit)))
+      (if commit
+          (string-to-list commit)
+        ;; Enter composition loop
+        (rimel--composition-loop)))))
 
 (defun rimel--update-display ()
   "Update preedit overlay and echo area candidates from current rime state."
   (let ((ctx (liberime-get-context)))
-    (cond
-     ((eq rimel-inline-preedit 'candidate)
-      (rimel--show-preedit (alist-get 'commit-text-preview ctx)))
-     ((eq rimel-inline-preedit t)
-      (rimel--show-preedit (alist-get 'preedit (alist-get 'composition ctx)))))
+    (rimel--update-preedit ctx)
     (rimel--show-candidates ctx))
   nil)
 
@@ -551,18 +521,17 @@ Return list of characters to insert, or nil."
           (rimel--update-display)
           ;; Event loop
           (while (and continue (not (string-empty-p (liberime-get-input))))
-            (let* ((event (read-event))
-                   (translated (rimel--keyboard-translate event)))
+            (let ((event (read-event)))
               (cond
-               ;; Letter keys - continue composition
-               ((rimel--composable-key-p translated)
-                (when-let* ((commit (rimel--feed-key-and-check translated)))
-                  (setq result commit continue nil)))
-
                ;; Candidate selection by label key (1-9 etc.)
                ((rimel--event-in-p event rimel-select-label-keys)
                 (when-let* ((pos (cl-position event rimel-select-label-keys))
                             (commit (rimel--select-candidate pos)))
+                  (setq result commit continue nil)))
+
+               ;; Letter keys - continue composition
+               ((rimel--composable-key-p event)
+                (when-let* ((commit (rimel--feed-key-and-check event)))
                   (setq result commit continue nil)))
 
                ;; Key mapping via rimel-keymap
@@ -690,8 +659,15 @@ to detecting $ and \\ prefixes."
 
 ;;;###autoload
 (register-input-method "rimel" "Chinese" #'rimel-activate
-                       (if (char-displayable-p 12563) (char-to-string 12563) "中")
+                       rimel--title
                        "Rimel - Rime input method via liberime")
+
+;;;###autoload
+(register-input-method "rimel-quail" "Chinese"
+                       #'quail-use-package
+                       rimel--title
+                       "Rimel - Rime input method via Quail"
+                       "rimel-quail")
 
 (provide 'rimel)
 

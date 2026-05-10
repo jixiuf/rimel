@@ -167,6 +167,7 @@ Can be set in tests to simulate rime behavior.")
   (provide 'liberime))
 
 (require 'rimel)
+(require 'rimel-quail)
 
 ;; -----------------------------------------------------------------------
 ;; Test runner
@@ -508,28 +509,22 @@ Can be set in tests to simulate rime behavior.")
       (should (equal "luna_pinyin_simp"                     ; schema selected
                      rimel-test--rime-schema)))))
 
-(ert-deftest rimel-test-activate-selects-schema-once ()
-  "Test repeated activation selects the same schema only once."
-  (rimel-test--reset-rime)
+(ert-deftest rimel-test-rimel-quail-activate ()
+  "Test that rimel-quail activates as a Quail input method."
   (with-temp-buffer
-    (let ((rimel-schema "luna_pinyin_simp"))
-      (rimel-activate "rimel")
-      (rimel-activate "rimel")
-      (should (equal "luna_pinyin_simp"
-                     rimel-test--rime-schema))
-      (should (= 1 rimel-test--rime-schema-select-count)))))
+    (activate-input-method "rimel-quail")
+    (should (featurep 'rimel-quail))
+    (should (eq input-method-function #'quail-input-method))
+    (should (equal (quail-name) "rimel-quail"))))
 
-(ert-deftest rimel-test-activate-reselects-changed-schema ()
-  "Test activation selects again after `rimel-schema' changes."
+(ert-deftest rimel-test-rimel-quail-activate-with-schema ()
+  "Test Quail activation with a custom schema."
   (rimel-test--reset-rime)
   (with-temp-buffer
     (let ((rimel-schema "luna_pinyin_simp"))
-      (rimel-activate "rimel")
-      (setq rimel-schema "terra_pinyin")
-      (rimel-activate "rimel")
-      (should (equal "terra_pinyin"
-                     rimel-test--rime-schema))
-      (should (= 2 rimel-test--rime-schema-select-count)))))
+      (activate-input-method "rimel-quail")
+      (should (equal "luna_pinyin_simp"
+                     rimel-test--rime-schema)))))
 
 ;; -----------------------------------------------------------------------
 ;; Test: input-method skip conditions
@@ -576,6 +571,163 @@ Can be set in tests to simulate rime behavior.")
       (should (equal '(?，) result)))))                     ; immediate commit
 
 ;; -----------------------------------------------------------------------
+;; Test: input method frontend behavior
+;; -----------------------------------------------------------------------
+
+(ert-deftest rimel-test-input-method-direct-uses-raw-event ()
+  "Test that the direct input method sends raw events to Rime."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (rimel-activate "rimel")
+    (let (processed)
+      (setq rimel-test--process-key-hook
+            (lambda (key _mask)
+              (setq processed key
+                    rimel-test--rime-committed "F")))
+      (should (equal '(?F) (rimel-input-method ?f)))
+      (should (eq processed ?f)))))
+
+(ert-deftest rimel-test-composition-loop-uses-raw-event ()
+  "Test that the direct composition loop sends raw events to Rime."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "f")
+  (let (processed)
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () ?f)))
+      (setq rimel-test--process-key-hook
+            (lambda (key _mask)
+              (setq processed key
+                    rimel-test--rime-committed "F")))
+      (should (equal '(?F) (rimel--composition-loop)))
+      (should (eq processed ?f)))))
+
+(ert-deftest rimel-test-composition-loop-candidate-selection-raw-event ()
+  "Test that candidate selection uses the raw event."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你" "妮" "尼"))
+  (let ((rimel-select-label-keys '(?1 ?2 ?3)))
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () ?2)))
+      (should (equal '(?妮) (rimel--composition-loop))))))
+
+(ert-deftest rimel-test-composition-loop-symbol-event ()
+  "Test that symbol events are handled through `rimel-keymap'."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你"))
+  (let ((rimel-keymap '(("<up>" . "<up>"))))
+    (cl-letf (((symbol-function 'read-event)
+               (lambda () 'up))
+              ((symbol-function 'liberime-process-keys)
+               (lambda (_keys)
+                 (setq rimel-test--rime-committed "UP")
+                 (liberime-clear-composition)
+                 t)))
+      (should (equal '(?U ?P) (rimel--composition-loop))))))
+
+(ert-deftest rimel-test-rimel-quail-immediate-commit ()
+  "Test that rimel-quail sends Quail-translated keys to Rime."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (activate-input-method "rimel-quail")
+    (let (processed)
+      (setq rimel-test--process-key-hook
+            (lambda (key _mask)
+              (setq processed key
+                    rimel-test--rime-committed "A")))
+      (should (equal '(?A) (quail-input-method ?a)))
+      (should (eq processed ?a)))))
+
+(ert-deftest rimel-test-rimel-quail-multi-key-commit ()
+  "Test that rimel-quail keeps Quail's loop while Rime composes."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (activate-input-method "rimel-quail")
+    (setq unread-command-events '(?b))
+    (setq rimel-test--process-key-hook
+          (lambda (key _mask)
+            (when (eq key ?b)
+              (setq rimel-test--rime-committed "B"))))
+    (should (equal '(?B) (quail-input-method ?a)))))
+
+(ert-deftest rimel-test-rimel-quail-candidate-selection ()
+  "Test that rimel-quail candidate labels select Rime candidates."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (activate-input-method "rimel-quail")
+    (setq unread-command-events '(?2))
+    (setq rimel-test--process-key-hook
+          (lambda (_key _mask)
+            (setq rimel-test--rime-preedit "a"
+                  rimel-test--rime-candidates '("你" "妮" "尼"))))
+    (should (equal '(?妮) (quail-input-method ?a)))))
+
+(ert-deftest rimel-test-rimel-quail-rimel-keymap-command ()
+  "Test that rimel-quail routes configured command keys to Rime."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (activate-input-method "rimel-quail")
+    (setq unread-command-events '(?\C-m))
+    (cl-letf (((symbol-function 'liberime-process-keys)
+               (lambda (_keys)
+                 (setq rimel-test--rime-committed "RET")
+                 (liberime-clear-composition)
+                 t)))
+      (should (equal '(?R ?E ?T) (quail-input-method ?a))))))
+
+(ert-deftest rimel-test-rimel-quail-unhandled-key ()
+  "Test that rimel-quail clears Rime and returns unhandled keys."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (activate-input-method "rimel-quail")
+    (setq unread-command-events '(?\C-t))
+    (should-not (quail-input-method ?a))
+    (should (string-equal "" rimel-test--rime-input))
+    (should (equal '((no-record . ?\C-t)) unread-command-events))))
+
+(ert-deftest rimel-test-rimel-quail-echo-area-guidance ()
+  "Test that rimel-quail uses Quail echo prompt for candidates."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates
+        (list (propertize "你" :comment "ni") "妮"))
+  (with-temp-buffer
+    (let ((rimel-show-candidate 'echo-area)
+          (rimel-select-label-keys '(?a ?b)))
+      (activate-input-method "rimel-quail")
+      (setq rimel-quail--composing t
+            input-method-previous-message nil)
+      (rimel-quail--update-display)
+      (should input-method-use-echo-area)
+      (should (string-match-p "a\\.你(ni)" input-method-previous-message))
+      (should (string-match-p "b\\.妮" input-method-previous-message)))))
+
+(ert-deftest rimel-test-rimel-quail-posframe-display ()
+  "Test that rimel-quail uses Rimel posframe display when available."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你"))
+  (with-temp-buffer
+    (let ((rimel-show-candidate 'posframe)
+          displayed)
+      (activate-input-method "rimel-quail")
+      (setq rimel-quail--composing t
+            input-method-previous-message "old")
+      (cl-letf (((symbol-function 'require)
+                 (lambda (feature &rest _args)
+                   (eq feature 'posframe)))
+                ((symbol-function 'rimel--posframe-show)
+                 (lambda (_context)
+                   (setq displayed t))))
+        (rimel-quail--update-display)
+        (should displayed)
+        (should-not input-method-use-echo-area)
+        (should-not input-method-previous-message)))))
+
+;; -----------------------------------------------------------------------
 ;; Test: input method registered
 ;; -----------------------------------------------------------------------
 
@@ -584,6 +736,26 @@ Can be set in tests to simulate rime behavior.")
   (let ((im (assoc "rimel" input-method-alist)))
     (should im)                                            ; registered
     (should (equal "Chinese" (nth 1 im)))))                ; language is Chinese
+
+(ert-deftest rimel-test-rimel-quail-registered ()
+  "Test that rimel-quail is registered as an input method."
+  (let ((im (assoc "rimel-quail" input-method-alist)))
+    (should im)
+    (should (equal "Chinese" (nth 1 im)))
+    (should (eq #'quail-use-package (nth 2 im)))
+    (should (equal "rimel-quail" (nth 5 im)))))
+
+(ert-deftest rimel-test-rimel-quail-package-guidance ()
+  "Test that rimel-quail suppresses Quail's built-in key guidance."
+  (let ((package (quail-package "rimel-quail")))
+    (should package)
+    (should (eq 'rimel-quail (nth 3 package)))))
+
+(ert-deftest rimel-test-rimel-quail-no-explicit-register ()
+  "Test that rimel-quail.el does not register rimel-quail again."
+  (with-temp-buffer
+    (insert-file-contents "rimel-quail.el")
+    (should-not (re-search-forward "register-input-method" nil t))))
 
 ;; -----------------------------------------------------------------------
 ;; Test: defcustom defaults

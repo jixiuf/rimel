@@ -34,7 +34,8 @@ jobs:
             -L ~/.emacs.d/elpa/liberime-0.0.7 \
             --eval "(setq byte-compile-error-on-warn t)" \
             -f batch-byte-compile \
-            rimel.el
+            rimel.el \
+            rimel-quail.el
       - name: Install package-lint
         run: |
           emacs --batch -Q \
