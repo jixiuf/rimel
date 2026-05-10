@@ -30,7 +30,7 @@
 ;; a read-event loop (similar to quail), providing a native Emacs experience.
 ;;
 ;; Features:
-;; - Candidate display in echo area
+;; - Candidate display in input prompt
 ;; - Inline preedit overlay at cursor
 ;; - Pagination support
 ;; - Enter key for raw English commit
@@ -71,12 +71,13 @@ When nil, use the default schema configured in Rime."
   :group 'rimel)
 
 (defcustom rimel-show-candidate
-  (or (require 'posframe nil t) 'echo-area)
+  (or (require 'posframe nil t) 'prompt)
   "How to display candidates.
 nil - don't display candidates
-`echo-area' - display in the echo area (default)
+`prompt'   - display as the active input prompt
 `posframe'  - display in a child frame near cursor (requires posframe package)"
-  :type '(choice (const :tag "Echo area" echo-area)
+  :type '(choice (const :tag "No display" nil)
+                 (const :tag "Prompt" prompt)
                  (const :tag "Posframe" posframe))
   :group 'rimel)
 
@@ -295,7 +296,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
             (idx 0)
             (candidates-list candidates)
             (highlight-idx highlighted))
-        ;; Preedit (only for echo-area, posframe has overlay)
+        ;; Preedit (only for prompt, posframe has overlay)
         (when (and show-preedit preedit)
           (push (format "[%s]" preedit) parts))
         ;; Candidates
@@ -316,26 +317,25 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
         (string-join (nreverse parts) sep)))))
 
 (defun rimel--show-candidates (context)
-  "Display candidates from CONTEXT using the configured method."
+  "Display candidates from CONTEXT using the configured method.
+Return a prompt string for `read-event', or nil when candidates
+are displayed externally (e.g., via posframe)."
   (pcase rimel-show-candidate
     ('posframe (rimel--posframe-show context))
-    ('echo-area (rimel--echo-area-show context))))
+    ('prompt (rimel--prompt-show context))))
 
 (defun rimel--hide-candidates ()
   "Hide the candidate display."
   (pcase rimel-show-candidate
     ('posframe (rimel--posframe-hide))
-    ('echo-area (let ((message-log-max nil)) (message nil)))))
+    ('prompt nil)))
 
-;; Echo area backend
+;; Prompt backend
 
-(defun rimel--echo-area-show (context)
-  "Display candidates from CONTEXT in the echo area."
-  (let ((content (rimel--format-candidates
-                  context " " rimel-candidate-show-preedit)))
-    (when content
-      (let ((message-log-max nil))
-        (message "%s" content)))))
+(defun rimel--prompt-show (context)
+  "Return candidates from CONTEXT for use as an input prompt."
+  (rimel--format-candidates
+   context " " (eq rimel-inline-preedit 'candidate)))
 
 ;; Posframe backend
 (defun rimel--at-screen-bottom-p ()
@@ -345,9 +345,11 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
     (>= current-line (- window-height 1))))
 
 (defun rimel--posframe-show (context)
-  "Display candidates from CONTEXT in a posframe near cursor."
+  "Display candidates from CONTEXT in a posframe near cursor.
+Return nil on success (candidates shown in child frame), or a
+prompt string for `read-event' when posframe is unavailable (TUI)."
   (if (not (require 'posframe nil t))
-      (rimel--echo-area-show context)
+      (rimel--prompt-show context)
     (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
            (content (rimel--format-candidates
                      context sep rimel-candidate-show-preedit)))
@@ -366,7 +368,8 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          :border-color (face-background 'rimel-posframe-border-face nil t)
          :min-width rimel-posframe-min-width
          :timeout nil
-         rimel-posframe-properties)))))
+         rimel-posframe-properties)
+        nil))))
 
 (defun rimel--posframe-hide ()
   "Hide the posframe candidate display."
@@ -440,30 +443,28 @@ This function serves as `input-method-function'."
           (rimel--composition-loop))))))
 
 (defun rimel--update-display ()
-  "Update preedit overlay and echo area candidates from current rime state."
+  "Update preedit overlay and candidate display from current rime state.
+Return a prompt string when the candidate backend uses the active
+input prompt."
   (let ((ctx (liberime-get-context)))
     (cond
      ((eq rimel-inline-preedit 'candidate)
       (rimel--show-preedit (alist-get 'commit-text-preview ctx)))
      ((eq rimel-inline-preedit t)
       (rimel--show-preedit (alist-get 'preedit (alist-get 'composition ctx)))))
-    (rimel--show-candidates ctx))
-  nil)
+    (rimel--show-candidates ctx)))
 
 (defun rimel--check-commit ()
-  "Return committed text if any, otherwise update display."
+  "Return committed text if any."
   (let ((commit (rimel--get-commit)))
-    (if commit
-        (progn
-          (when-let* ((input (liberime-get-input)))
-            (setq unread-command-events
-                  (append (string-to-list input) unread-command-events)))
-          commit)
-      (rimel--update-display)
-      nil)))
+    (when commit
+      (when-let* ((input (liberime-get-input)))
+        (setq unread-command-events
+              (append (string-to-list input) unread-command-events)))
+      commit)))
 
 (defun rimel--feed-key-and-check (key)
-  "Send KEY to rime.  Return committed text if any, otherwise update display."
+  "Send KEY to rime.  Return committed text if any."
   (liberime-process-key key)
   (rimel--check-commit))
 
@@ -483,31 +484,36 @@ This function serves as `input-method-function'."
 Return list of characters to insert, or nil."
   (let ((result nil)
         (continue t)
+        (prompt nil)
         (echo-keystrokes 0))
     (unwind-protect
         (progn
-          (rimel--update-display)
+          (setq prompt (rimel--update-display))
           ;; Event loop
           (while (and continue (not (string-empty-p (liberime-get-input))))
-            (let* ((event (read-event))
+            (let* ((event (read-event prompt))
                    (translated (rimel--keyboard-translate event)))
               (cond
-               ;; Key mapping via rimel-keymap (special keys first)
+               ;; Key mapping via rimel-keymap
                ((when-let* ((pair (cl-find event rimel-keymap
                                             :key #'rimel--get-key
                                             :test #'equal))
                             (rime-keycode (cdr pair)))
                   (liberime-process-keys (kbd rime-keycode))
-                  (when-let* ((commit (rimel--check-commit)))
-                    (setq result commit continue nil))
+                  (if-let* ((commit (rimel--check-commit)))
+                      (setq result commit continue nil)
+                    (setq prompt (rimel--update-display)))
                   t))
 
                ;; Character key — pass directly to rime.
                ;; Rime handles everything natively: composition continuation,
                ;; candidate selection by digits, symbol patterns, etc.
                ((integerp translated)
-                (when-let* ((commit (rimel--feed-key-and-check translated)))
-                  (setq result commit continue nil)))
+                (if-let* ((commit (rimel--feed-key-and-check translated)))
+                    (setq result commit continue nil)
+                  ;; Rime handled the key — update display, continue composing
+                  (setq prompt (rimel--update-display))
+                  t))
 
                ;; Unhandled event - exit composition, push event back
                (t
