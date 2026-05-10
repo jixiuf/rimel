@@ -43,6 +43,9 @@
 (defvar rimel-test--rime-schema nil
   "Last schema selected.")
 
+(defvar rimel-test--rime-schema-select-count 0
+  "Number of schema selection attempts.")
+
 (defvar rimel-test--process-key-hook nil
   "Hook called with (key mask) on each process-key call.
 Can be set in tests to simulate rime behavior.")
@@ -58,6 +61,7 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-preedit nil
         rimel-test--rime-commit-preview nil
         rimel-test--rime-schema nil
+        rimel-test--rime-schema-select-count 0
         rimel-test--process-key-hook nil))
 
 ;; Provide the liberime feature so (require 'liberime) succeeds
@@ -114,8 +118,13 @@ Can be set in tests to simulate rime behavior.")
     "Mock: no-op."
     nil)
 
+  (defun liberime-current-schema ()
+    "Mock: return the current schema."
+    rimel-test--rime-schema)
+
   (defun liberime-try-select-schema (schema)
     "Mock: record selected schema."
+    (cl-incf rimel-test--rime-schema-select-count)
     (setq rimel-test--rime-schema schema))
 
   (defun liberime-select-schema-interactive ()
@@ -498,6 +507,29 @@ Can be set in tests to simulate rime behavior.")
       (rimel-activate "rimel")
       (should (equal "luna_pinyin_simp"                     ; schema selected
                      rimel-test--rime-schema)))))
+
+(ert-deftest rimel-test-activate-selects-schema-once ()
+  "Test repeated activation selects the same schema only once."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (let ((rimel-schema "luna_pinyin_simp"))
+      (rimel-activate "rimel")
+      (rimel-activate "rimel")
+      (should (equal "luna_pinyin_simp"
+                     rimel-test--rime-schema))
+      (should (= 1 rimel-test--rime-schema-select-count)))))
+
+(ert-deftest rimel-test-activate-reselects-changed-schema ()
+  "Test activation selects again after `rimel-schema' changes."
+  (rimel-test--reset-rime)
+  (with-temp-buffer
+    (let ((rimel-schema "luna_pinyin_simp"))
+      (rimel-activate "rimel")
+      (setq rimel-schema "terra_pinyin")
+      (rimel-activate "rimel")
+      (should (equal "terra_pinyin"
+                     rimel-test--rime-schema))
+      (should (= 2 rimel-test--rime-schema-select-count)))))
 
 ;; -----------------------------------------------------------------------
 ;; Test: input-method skip conditions
