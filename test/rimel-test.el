@@ -157,6 +157,7 @@ Can be set in tests to simulate rime behavior.")
 
   (provide 'liberime))
 
+(setq load-prefer-newer t)
 (require 'rimel)
 
 ;; -----------------------------------------------------------------------
@@ -165,7 +166,6 @@ Can be set in tests to simulate rime behavior.")
 
 (defun rimel-test-run ()
   "Run all rimel ERT tests and exit with appropriate status."
-  (setq load-prefer-newer t) 
   (ert-run-tests-batch-and-exit "rimel-test-*"))
 
 ;; -----------------------------------------------------------------------
@@ -595,20 +595,22 @@ Can be set in tests to simulate rime behavior.")
 ;; Test: show-candidates dispatching
 ;; -----------------------------------------------------------------------
 
-(ert-deftest rimel-test-show-candidates-echo-area ()
-  "Test echo-area candidate display."
+(ert-deftest rimel-test-show-candidates-prompt ()
+  "Test prompt candidate display."
   (rimel-test--reset-rime)
-  (let ((rimel-show-candidate 'echo-area)
+  (let ((rimel-show-candidate 'prompt)
         (displayed nil))
-    (cl-letf (((symbol-function 'rimel--echo-area-show)
-               (lambda (ctx) (setq displayed ctx))))
+    (cl-letf (((symbol-function 'rimel--prompt-show)
+               (lambda (ctx)
+                 (setq displayed ctx)
+                 "prompt")))
       (let ((ctx '((menu . ((candidates . ("你")))))))
-        (rimel--show-candidates ctx)
-        (should displayed)))))                             ; echo-area-show called
+        (should (equal "prompt" (rimel--show-candidates ctx)))
+        (should displayed)))))                             ; prompt-show called
 
-(ert-deftest rimel-test-hide-candidates-echo-area ()
-  "Test echo-area candidate hiding."
-  (let ((rimel-show-candidate 'echo-area))
+(ert-deftest rimel-test-hide-candidates-prompt ()
+  "Test prompt candidate hiding."
+  (let ((rimel-show-candidate 'prompt))
     ;; Should not error
     (rimel--hide-candidates)))                             ; hide succeeds
 
@@ -646,9 +648,27 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-candidates '("你" "妮" "尼"))
   (with-temp-buffer
     (cl-letf (((symbol-function 'read-event)
-               (lambda () ?2)))                            ; select 2nd candidate
+               (lambda (&optional _prompt) ?2)))           ; select 2nd candidate
       (let ((result (rimel--composition-loop)))
         (should (equal '(?妮) result))))))                  ; 2nd candidate selected
+
+(ert-deftest rimel-test-composition-loop-read-event-prompt ()
+  "Test that prompt candidates are passed to `read-event'."
+  (rimel-test--reset-rime)
+  (setq rimel-test--rime-input "ni"
+        rimel-test--rime-preedit "ni"
+        rimel-test--rime-candidates '("你" "妮" "尼"))
+  (let ((rimel-show-candidate 'prompt)
+        captured-prompt)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'read-event)
+                 (lambda (&optional prompt)
+                   (setq captured-prompt (substring-no-properties prompt))
+                   ?2)))
+        (let ((result (rimel--composition-loop)))
+          (should (equal '(?妮) result))
+          (should (string-match-p "\\[ni\\]" captured-prompt))
+          (should (string-match-p "1\\.你" captured-prompt)))))))
 
 
 (ert-deftest rimel-test-composition-loop-unhandled-key ()
@@ -659,7 +679,7 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-candidates '("你"))
   (with-temp-buffer
     (cl-letf (((symbol-function 'read-event)
-               (lambda () ?\C-t)))                         ; unhandled key
+               (lambda (&optional _prompt) ?\C-t)))        ; unhandled key
       (let ((unread-command-events nil))
         (rimel--composition-loop)
         (should (memq ?\C-t unread-command-events))))))    ; key pushed back

@@ -8,7 +8,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 - 📦 **单文件**：仅 `rimel.el` 一个文件，约 700 行
 - 🔌 **依赖少**：仅依赖 liberime（无需额外 C 模块）
 - 🏗️ **原生集成**：使用 Emacs 内置 `input-method-function` + `register-input-method`
-- 📋 **候选展示**：echo area（默认）或 posframe 浮动窗口
+- 📋 **候选展示**：prompt 或 posframe 浮动窗口
 - ✏️ **光标处编码 overlay**：输入时在光标处显示 preedit
 - 📄 **翻页**：支持 `C-f/C-b`、`PgDn/PgUp` 等（完全可配置）
 - ⏎ **Enter 英文上屏**：按 Enter 直接提交原始英文输入
@@ -42,7 +42,10 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ;; 可选：指定输入方案
 (setq rimel-schema "luna_pinyin_simp")
 
-;; 可选：使用 posframe 展示候选（如果安装了 posframe,默认会使用 posframe）
+;; 可选：使用 prompt 展示候选（如果安装了 posframe,默认会使用 posframe）
+(setq rimel-show-candidate 'prompt)
+
+;; 可选：使用 posframe 展示候选
 (setq rimel-show-candidate 'posframe)
 
 ;; 像 icomplete/ido 一样 C-n 选择下一个时，将其提到第1位
@@ -147,7 +150,7 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 | **代码量** | ~700 行 | ~1200 行 (rime.el) + C | ~6000 行 (pyim) + 326 行桥接 |
 | **C 模块** | 无（复用 liberime） | 自带 lib.c | 无（复用 liberime） |
 | **输入法接口** | `input-method-function` + `read-event` 循环 | `input-method-function` + minor mode | `input-method-function` + 独立框架 |
-| **候选展示** | nil/echo area/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
+| **候选展示** | nil/prompt/posframe | minibuffer/popup/posframe/sidewindow | posframe/popup/minibuffer |
 | **按键处理** | `read-event` 循环（类似 quail） | `overriding-terminal-local-map` | 独立事件系统 |
 
 ### 设计哲学
@@ -181,7 +184,7 @@ Predicates 是一组函数，在每次按键时检查上下文，决定是否跳
 | 基本中文输入 | ✅ | ✅ | ✅ |
 | 候选翻页 | ✅ | ✅ | ✅ |
 | Enter 英文上屏 | ✅ | ✅ | ✅ |
-| 多种候选展示 | echo area / posframe | 5 种 | 3 种 |
+| 多种候选展示 | prompt / posframe | 5 种 | 3 种 |
 | Predicates 自动切换 | ✅ (8 个内置) | ✅ (20 个) | ✅ (probe) |
 | Inline ASCII | ❌ | ✅ | ❌ |
 | 多输入方案后端 | ❌ | ❌ | ✅ |
