@@ -57,7 +57,6 @@
 (declare-function posframe-show "ext:posframe")
 (declare-function posframe-hide "ext:posframe")
 (declare-function quail-keyboard-translate "quail")
-(defvar quail-keyboard-layout-alist)
 
 ;;; Customization
 
@@ -211,26 +210,6 @@ display as [c d e a b]."
   "Properties for posframe.
 See =posframe-show= for supported values."
   :type '(plist)
-  :group 'rimel)
-
-(defcustom rimel-keyboard-layout nil
-  "Keyboard layout type for translating keys before rime processing.
-When non-nil, rimel translates typed keys using Quail's
-`quail-keyboard-translate' before sending them to the rime
-engine.  This allows rime schemas (e.g., wubi, pinyin) to work
-correctly with non-QWERTY OS keyboard layouts like
-programmer-dvorak.
-
-Available layout types are listed in `quail-keyboard-layout-alist'.
-You can either set this variable directly or use the interactive
-function `rimel-set-keyboard-layout'."
-  :type '(choice (const :tag "No translation" nil)
-                 string)
-  :set (lambda (sym val)
-         (set-default sym val)
-         (when val
-           (require 'quail)
-           (quail-set-keyboard-layout val)))
   :group 'rimel)
 
 ;;; Internal variables
@@ -404,35 +383,12 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
   (rimel--clear-preedit)
   (rimel--hide-candidates))
 
-;;; Keyboard layout remapping
-
-;;;###autoload
-(defun rimel-set-keyboard-layout (kbd-type)
-  "Set the keyboard layout for rimel key translation.
-KBD-TYPE is a key in `quail-keyboard-layout-alist' (e.g.,
-\"programmer-dvorak\", \"dvorak\", \"pc105-uk\").  After setting,
-rimel translates keys from this layout before sending them to
-the rime engine."
-  (interactive
-   (progn
-     (require 'quail)
-     (let* ((completion-ignore-case t)
-            (type (completing-read "Keyboard type: "
-                                   quail-keyboard-layout-alist)))
-       (list type))))
-  (require 'quail)
-  (quail-set-keyboard-layout kbd-type)
-  (setq rimel-keyboard-layout kbd-type))
-
 (defun rimel--keyboard-translate (char)
-  "Translate CHAR using the current keyboard layout.
-If `rimel-keyboard-layout' is nil, return CHAR unchanged.
-Otherwise delegate to `quail-keyboard-translate'."
-  (if (or (null rimel-keyboard-layout)
-          (not (integerp char)))
-      char
-    (require 'quail)
-    (quail-keyboard-translate char)))
+  "If quail is loaded, translate CHAR via `quail-keyboard-translate'.
+Otherwise return CHAR unchanged."
+  (if (and (featurep 'quail) (integerp char))
+      (quail-keyboard-translate char)
+    char))
 
 ;;; Core input method
 
