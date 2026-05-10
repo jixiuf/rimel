@@ -53,6 +53,7 @@
 (declare-function liberime-clear-composition "ext:liberime-core")
 (declare-function liberime-select-candidate "ext:liberime-core")
 (declare-function liberime-get-candidates "ext:liberime-core")
+(declare-function liberime-current-schema "ext:liberime-core")
 (declare-function posframe-show "ext:posframe")
 (declare-function posframe-hide "ext:posframe")
 (declare-function quail-keyboard-translate "quail")
@@ -254,7 +255,9 @@ Called by Emacs when user selects the \"rimel\" input method.
 _NAME is the input method name (unused)."
   (unless (liberime-workable-p)
     (liberime-load))
-  (when (and rimel-schema (liberime-workable-p))
+  (when (and rimel-schema
+             (liberime-workable-p)
+             (not (string= rimel-schema (liberime-current-schema))))
     (liberime-try-select-schema rimel-schema))
   (setq-local input-method-function #'rimel-input-method)
   (setq-local deactivate-current-input-method-function #'rimel-deactivate))

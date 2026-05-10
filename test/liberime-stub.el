@@ -12,6 +12,7 @@
 (defun liberime-select-schema (_schema) nil)
 (defun liberime-get-schema-list () nil)
 (defun liberime-select-schema-interactive () nil)
+(defun liberime-current-schema () nil)
 (defun liberime-try-select-schema (_s) nil)
 (defun liberime-deploy () nil)
 (defun liberime-workable-p () nil)
