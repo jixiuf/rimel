@@ -236,7 +236,7 @@ _NAME is the input method name (unused)."
     (liberime-load))
   (when (and rimel-schema
              (liberime-workable-p)
-             (not (string= rimel-schema (liberime-current-schema))))
+             (not (string= rimel-schema liberime-current-schema)))
     (liberime-try-select-schema rimel-schema))
   (setq-local input-method-function #'rimel-input-method)
   (setq-local deactivate-current-input-method-function #'rimel-deactivate))
