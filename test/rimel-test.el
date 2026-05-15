@@ -62,6 +62,7 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-commit-preview nil
         rimel-test--rime-schema nil
         rimel-test--rime-schema-select-count 0
+        liberime-current-schema nil
         rimel-test--process-key-hook nil))
 
 ;; Provide the liberime feature so (require 'liberime) succeeds
@@ -118,14 +119,11 @@ Can be set in tests to simulate rime behavior.")
     "Mock: no-op."
     nil)
 
-  (defun liberime-current-schema ()
-    "Mock: return the current schema."
-    rimel-test--rime-schema)
-
   (defun liberime-try-select-schema (schema)
     "Mock: record selected schema."
     (cl-incf rimel-test--rime-schema-select-count)
-    (setq rimel-test--rime-schema schema))
+    (setq rimel-test--rime-schema schema
+          liberime-current-schema schema))
 
   (defun liberime-select-schema-interactive ()
     "Mock: no-op."
