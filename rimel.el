@@ -129,12 +129,6 @@ Examples:
                        (string :tag "Rime key")))
   :group 'rimel)
 
-(defcustom rimel-select-label-keys '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9)
-  "Keys for selecting candidates by position.
-The Nth key selects the Nth candidate on the current page."
-  :type '(repeat sexp)
-  :group 'rimel)
-
 (defcustom rimel-disable-predicates nil
   "List of predicate functions for auto-switching to English.
 Each function takes no arguments and returns non-nil to disable
@@ -301,11 +295,10 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
           (push (format "[%s]" preedit) parts))
         ;; Candidates
         (dolist (cand candidates-list)
-          (let* ((label (nth idx rimel-select-label-keys))
-                 (label-str (if label (format "%c." label) (format "%d." (1+ idx))))
-                 (comment (get-text-property 0 :comment cand))
-                 (text (if comment (format "%s(%s)" cand comment) cand))
-                 (item (format "%s%s" label-str text)))
+          (let* ((label-str (format "%d." (1+ idx)))
+                (comment (get-text-property 0 :comment cand))
+                (text (if comment (format "%s(%s)" cand comment) cand))
+                (item (format "%s%s" label-str text)))
             (push (if (eql idx highlight-idx)
                       (propertize item 'face 'rimel-highlight-face)
                     item)
@@ -403,28 +396,12 @@ Includes lowercase letters and common Chinese punctuation marks."
                           ?, ?. ?<  ?>   ?\? ?/
                           ?\,  ?。 ?…  ?—  ?·  ?～  ?、)))))
 
-(defun rimel--event-in-p (event keys)
-  "Return non-nil if EVENT is a member of KEYS list.
-Works for both character (integer) and symbol events."
-  (memq event keys))
-
 (defun rimel--get-commit ()
   "Get committed text from rime, or nil."
   (let ((commit (liberime-get-commit)))
     (when (and commit (not (string-equal commit "")))
       commit)))
 
-
-(defun rimel--select-candidate (idx)
-  "Select candidate at IDX (0-based).  Return committed text or nil."
-(if rimel-highlight-first
-      (let* ((ctx (liberime-get-context))
-             (menu (alist-get 'menu ctx))
-             (highlighted (alist-get 'highlighted-candidate-index menu)))
-        (liberime-select-candidate (+ idx (or highlighted 0))))
-    (liberime-select-candidate idx))
-  (or (rimel--get-commit)
-      (rimel--update-display)))
 
 (defun rimel-input-method (key)
   "Process KEY through rimel input method.
@@ -510,18 +487,7 @@ Return list of characters to insert, or nil."
             (let* ((event (read-event))
                    (translated (rimel--keyboard-translate event)))
               (cond
-               ;; Letter keys - continue composition
-               ((rimel--composable-key-p translated)
-                (when-let* ((commit (rimel--feed-key-and-check translated)))
-                  (setq result commit continue nil)))
-
-               ;; Candidate selection by label key (1-9 etc.)
-               ((rimel--event-in-p event rimel-select-label-keys)
-                (when-let* ((pos (cl-position event rimel-select-label-keys))
-                            (commit (rimel--select-candidate pos)))
-                  (setq result commit continue nil)))
-
-               ;; Key mapping via rimel-keymap
+               ;; Key mapping via rimel-keymap (special keys first)
                ((when-let* ((pair (cl-find event rimel-keymap
                                             :key #'rimel--get-key
                                             :test #'equal))
@@ -531,7 +497,14 @@ Return list of characters to insert, or nil."
                     (setq result commit continue nil))
                   t))
 
-               ;; Unhandled key - exit composition, push key back
+               ;; Character key — pass directly to rime.
+               ;; Rime handles everything natively: composition continuation,
+               ;; candidate selection by digits, symbol patterns, etc.
+               ((integerp translated)
+                (when-let* ((commit (rimel--feed-key-and-check translated)))
+                  (setq result commit continue nil)))
+
+               ;; Unhandled event - exit composition, push event back
                (t
                 (liberime-clear-composition)
                 (setq continue nil)

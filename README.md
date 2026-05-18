@@ -12,7 +12,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 - ✏️ **光标处编码 overlay**：输入时在光标处显示 preedit
 - 📄 **翻页**：支持 `C-f/C-b`、`PgDn/PgUp` 等（完全可配置）
 - ⏎ **Enter 英文上屏**：按 Enter 直接提交原始英文输入
-- 🔢 **数字键/空格选候选**
+- 🔢 **数字键/空格选候选**（由 rime 原生处理，无额外拦截）
 - ⌨️ **所有按键可配置**：翻页、确认、取消、退格、选择键均可自定义 see rimel-keymap
 - 🧠 **Predicates 断言**：根据上下文自动切换中/英文（代码区、字母后、evil 状态等）
 
@@ -60,7 +60,7 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 | 按键 | 功能 | 配置变量 |
 |------|------|----------|
 | `a-z` | 输入拼音 | — |
-| `1-9` | 选择对应候选 | `rimel-select-label-keys` |
+| `1-9` | 选择对应候选（由 rime 底层处理） | — |
 | `Space` | 选择第一个候选 | `rimel-keymap` |
 | `Enter` | 英文上屏 / 首选上屏 | `rimel-keymap` |
 | `C-f` `PgDn` | 下一页 | `rimel-keymap` |
