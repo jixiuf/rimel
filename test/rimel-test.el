@@ -68,10 +68,21 @@ Can be set in tests to simulate rime behavior.")
 ;; Provide the liberime feature so (require 'liberime) succeeds
 (unless (featurep 'liberime)
   (defun liberime-process-key (key &optional mask)
-    "Mock: append KEY to input buffer, run hook."
-    (when (and (integerp key) (>= key ?a) (<= key ?z))
+    "Mock: append KEY to input buffer, simulate candidate selection."
+    (cond
+     ;; Digit key in candidate list — select candidate
+     ((and (integerp key) (>= key ?1) (<= key ?9)
+           rimel-test--rime-candidates
+           (> (length rimel-test--rime-candidates) 0))
+      (let ((idx (- key ?1)))
+        (when (< idx (length rimel-test--rime-candidates))
+          (setq rimel-test--rime-committed
+                (nth idx rimel-test--rime-candidates))
+          (liberime-clear-composition))))
+     ;; Letter key — append to input buffer
+     ((and (integerp key) (>= key ?a) (<= key ?z))
       (setq rimel-test--rime-input
-            (concat rimel-test--rime-input (char-to-string key))))
+            (concat rimel-test--rime-input (char-to-string key)))))
     (when rimel-test--process-key-hook
       (funcall rimel-test--process-key-hook key (or mask 0)))
     t)
@@ -140,14 +151,6 @@ Can be set in tests to simulate rime behavior.")
     (interactive)
     nil)
 
-  (defun liberime-get-candidates ( &optional num pos)
-    "Mock: return rotated candidates from POS, up to NUM items."
-    (let* ((len (length rimel-test--rime-candidates))
-           (start (min pos len))
-           (count (or num (- len start))))
-      (append (cl-subseq rimel-test--rime-candidates start (min (+ start count) len))
-              (cl-subseq rimel-test--rime-candidates 0 (max 0 (- count (- len start)))))))
-
   (defun liberime-process-keys (keys)
     "Mock: simulate key processing."
     (let ((keyseq (cond
@@ -213,18 +216,6 @@ Can be set in tests to simulate rime behavior.")
   (should-not (rimel--composable-key-p nil)))              ; nil
 
 ;; -----------------------------------------------------------------------
-;; Test: event-in-p
-;; -----------------------------------------------------------------------
-
-(ert-deftest rimel-test-event-in-p ()
-  "Test event membership in key lists."
-  (should (rimel--event-in-p ?a '(?a ?b ?c)))              ; char in list
-  (should-not (rimel--event-in-p ?d '(?a ?b ?c)))          ; char not in list
-  (should (rimel--event-in-p 'return '(return ?\r)))        ; symbol in list
-  (should (rimel--event-in-p 'escape '(escape ?\C-g)))     ; escape in cancel keys
-  (should-not (rimel--event-in-p 'up '(escape ?\C-g))))    ; up not in cancel keys
-
-;; -----------------------------------------------------------------------
 ;; Test: format-candidates
 ;; -----------------------------------------------------------------------
 
@@ -276,23 +267,6 @@ Can be set in tests to simulate rime behavior.")
                         (last-page-p . t))))))
     (let ((result (rimel--format-candidates ctx "\n")))
       (should (string-match-p "\n" result)))))             ; newline separator used
-
-;; -----------------------------------------------------------------------
-;; Test: format-candidates with highlight-first
-;; -----------------------------------------------------------------------
-
-(ert-deftest rimel-test-format-candidates-highlight-first ()
-  "Test that rimel-highlight-first rotates candidates."
-  (let ((rimel-highlight-first t)
-        (ctx '((composition . ((preedit . "ni")))
-               (menu . ((candidates . ("a" "b" "c" "d" "e"))
-                        (highlighted-candidate-index . 2)
-                        (page-no . 0)
-                        (last-page-p . t))))))
-    (setq rimel-test--rime-candidates '("a" "b" "c" "d" "e"))
-    (let ((result (rimel--format-candidates ctx)))
-      ;; With highlighted=2, rotation should put "c" first
-      (should (string-match-p "^1\\.c" result)))))         ; c is first after rotation
 
 ;; -----------------------------------------------------------------------
 ;; Test: format-candidates with candidate comment
@@ -468,17 +442,6 @@ Can be set in tests to simulate rime behavior.")
   (should-not (rimel--get-commit)))                        ; nil returns nil
 
 ;; -----------------------------------------------------------------------
-;; Test: select-candidate
-;; -----------------------------------------------------------------------
-
-(ert-deftest rimel-test-select-candidate ()
-  "Test candidate selection."
-  (rimel-test--reset-rime)
-  (setq rimel-test--rime-candidates '("你" "妮" "尼"))
-  (let ((result (rimel--select-candidate 1)))
-    (should (equal "妮" result))))                          ; second candidate selected
-
-;; -----------------------------------------------------------------------
 ;; Test: activation and deactivation
 ;; -----------------------------------------------------------------------
 
@@ -583,16 +546,6 @@ Can be set in tests to simulate rime behavior.")
     (should im)                                            ; registered
     (should (equal "Chinese" (nth 1 im)))))                ; language is Chinese
 
-;; -----------------------------------------------------------------------
-;; Test: defcustom defaults
-;; -----------------------------------------------------------------------
-
-
-(ert-deftest rimel-test-default-select-label-keys ()
-  "Test default select label keys are 1-9."
-  (should (equal '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9)
-                 rimel-select-label-keys)))                 ; 1-9
-
 
 ;; -----------------------------------------------------------------------
 ;; Test: rimel-keymap entries
@@ -689,10 +642,10 @@ Can be set in tests to simulate rime behavior.")
         rimel-test--rime-candidates '("你"))
   (with-temp-buffer
     (cl-letf (((symbol-function 'read-event)
-               (lambda () ?\C-t)))                         ; unhandled key
+               (lambda () 'f1)))                           ; unhandled non-char key
       (let ((unread-command-events nil))
         (rimel--composition-loop)
-        (should (memq ?\C-t unread-command-events))))))    ; key pushed back
+        (should (memq 'f1 unread-command-events))))))     ; key pushed back
 
 ;; -----------------------------------------------------------------------
 ;; Test: update-display

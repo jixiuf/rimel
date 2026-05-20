@@ -52,7 +52,6 @@
 (declare-function liberime-get-input "ext:liberime-core")
 (declare-function liberime-clear-composition "ext:liberime-core")
 (declare-function liberime-select-candidate "ext:liberime-core")
-(declare-function liberime-get-candidates "ext:liberime-core")
 (declare-function posframe-show "ext:posframe")
 (declare-function posframe-hide "ext:posframe")
 (declare-function quail-keyboard-translate "quail")
@@ -169,13 +168,6 @@ Example:
   "Face for the highlighted candidate."
   :group 'rimel)
 
-(defcustom rimel-highlight-first nil
-  "When non-nil, move the highlighted candidate to the first position.
-For example, if candidates are [a b c d e] and c is highlighted,
-display as [c d e a b]."
-  :type 'boolean
-  :group 'rimel)
-
 (defcustom rimel-posframe-style 'vertical
   "Candidate layout style in posframe.
 `vertical'   - one candidate per line
@@ -279,17 +271,13 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
          (candidates (alist-get 'candidates menu))
          (highlighted (or (alist-get 'highlighted-candidate-index menu) 0))
          (page-no (or (alist-get 'page-no menu) 0))
-         (page-size (or (alist-get 'page-size menu) 5))
-         (pos (+ (* page-no page-size) highlighted))
          (last-page-p (alist-get 'last-page-p menu))
          (sep (or separator " ")))
     (when candidates
       (let ((parts '())
             (idx 0)
-            (candidates-list (if (and rimel-highlight-first (> highlighted 0))
-                                 (or (liberime-get-candidates page-size pos) candidates)
-                               candidates))
-            (highlight-idx (if rimel-highlight-first 0 highlighted)))
+            (candidates-list candidates)
+            (highlight-idx highlighted))
         ;; Preedit (only for echo-area, posframe has overlay)
         (when (and show-preedit preedit)
           (push (format "[%s]" preedit) parts))

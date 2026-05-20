@@ -45,9 +45,6 @@ Rimel 是一个轻量级的 Emacs 中文输入法，直接基于 [liberime](http
 ;; 可选：使用 posframe 展示候选（如果安装了 posframe,默认会使用 posframe）
 (setq rimel-show-candidate 'posframe)
 
-;; 像 icomplete/ido 一样 C-n 选择下一个时，将其提到第1位
-(setq rimel-highlight-first t)
-
 ;; horizontal or vertical
 (setq rimel-posframe-style 'horizontal)
 
