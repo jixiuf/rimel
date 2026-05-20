@@ -81,11 +81,28 @@ nil - don't display candidates
   :group 'rimel)
 
 (defcustom rimel-inline-preedit 'candidate
-  "Set to not nil to enable inline preedit.
-set to \='candidate to inline candidate"
+  "Control the inline preedit overlay at cursor position.
+Set to t to show the raw preedit string (e.g. pinyin).
+Set to \='candidate to show the commit-text-preview.
+Set to nil to disable cursor overlay entirely.
+
+This only controls the overlay at point.  To control whether
+the preedit appears in the candidate window (echo-area or
+posframe), see `rimel-candidate-show-preedit'."
   :type '(choice (const :tag "Inline candidate" candidate)
                  (const :tag "Inline preedit" t)
                  (const :tag "Disable inline preedit" nil))
+  :group 'rimel)
+
+(defcustom rimel-candidate-show-preedit t
+  "When non-nil, show the current preedit string in the candidate window.
+This affects both echo-area and posframe candidate displays.
+Set to nil to hide preedit from the candidate box (only
+candidates and page info will be shown).
+
+This is independent of `rimel-inline-preedit', which controls
+the overlay at the cursor position."
+  :type 'boolean
   :group 'rimel)
 
 
@@ -315,7 +332,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
 (defun rimel--echo-area-show (context)
   "Display candidates from CONTEXT in the echo area."
   (let ((content (rimel--format-candidates
-                  context " " (eq rimel-inline-preedit 'candidate))))
+                  context " " rimel-candidate-show-preedit)))
     (when content
       (let ((message-log-max nil))
         (message "%s" content)))))
@@ -333,7 +350,7 @@ When SHOW-PREEDIT is non-nil, include the preedit string."
       (rimel--echo-area-show context)
     (let* ((sep (if (eq rimel-posframe-style 'vertical) "\n" " "))
            (content (rimel--format-candidates
-                     context sep (eq rimel-inline-preedit 'candidate))))
+                     context sep rimel-candidate-show-preedit)))
       (if (not content)
           (rimel--posframe-hide)
         (apply #'posframe-show
